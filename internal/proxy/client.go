@@ -1,4 +1,4 @@
-package main
+package proxy
 
 import (
 	"context"
@@ -16,11 +16,12 @@ import (
 
 // HTTPClient handles HTTP requests with proper timeout and redirect control
 type HTTPClient struct {
-	client *http.Client
+	client  *http.Client
+	version string // Version for User-Agent
 }
 
 // NewHTTPClient creates a new HTTP client with sensible defaults
-func NewHTTPClient() *HTTPClient {
+func NewHTTPClient(version string) *HTTPClient {
 	transport := &http.Transport{
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 10,
@@ -38,6 +39,7 @@ func NewHTTPClient() *HTTPClient {
 				return http.ErrUseLastResponse
 			},
 		},
+		version: version,
 	}
 }
 
@@ -68,7 +70,7 @@ func (c *HTTPClient) ExecuteRequest(ctx context.Context, req *ProxyRequest) (*Pr
 
 	// Set default User-Agent if not provided
 	if httpReq.Header.Get("User-Agent") == "" {
-		httpReq.Header.Set("User-Agent", fmt.Sprintf("rb-slingshot/%s (https://requestbite.com/slingshot)", Version))
+		httpReq.Header.Set("User-Agent", fmt.Sprintf("rb-slingshot/%s (https://requestbite.com/slingshot)", c.version))
 	}
 
 	// Set Content-Length for POST/PUT/PATCH requests with body
@@ -149,7 +151,7 @@ func (c *HTTPClient) ExecuteStreamingRequest(ctx context.Context, req *ProxyRequ
 
 	// Set default User-Agent if not provided
 	if httpReq.Header.Get("User-Agent") == "" {
-		httpReq.Header.Set("User-Agent", fmt.Sprintf("rb-slingshot/%s (https://requestbite.com/slingshot)", Version))
+		httpReq.Header.Set("User-Agent", fmt.Sprintf("rb-slingshot/%s (https://requestbite.com/slingshot)", c.version))
 	}
 
 	// Set Content-Length for POST/PUT/PATCH requests with body
@@ -433,8 +435,8 @@ func (c *HTTPClient) createErrorResponse(errType *ProxyError, message string, me
 	}
 }
 
-// substitutePathParams replaces :param patterns in URL with actual values
-func (c *HTTPClient) substitutePathParams(targetURL string, pathParams map[string]string) string {
+// SubstitutePathParams replaces :param patterns in URL with actual values
+func (c *HTTPClient) SubstitutePathParams(targetURL string, pathParams map[string]string) string {
 	if pathParams == nil {
 		return targetURL
 	}

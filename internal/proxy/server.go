@@ -1,4 +1,4 @@
-package main
+package proxy
 
 import (
 	"context"
@@ -15,17 +15,18 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// ProxyServer handles HTTP proxy requests
-type ProxyServer struct {
+// Server handles HTTP proxy requests
+type Server struct {
 	port             int
 	httpClient       *HTTPClient
 	server           *http.Server
 	logger           *log.Logger
 	blockedHostnames []string // Configurable list of hostnames to block (prevents loops)
+	version          string   // Version for health endpoint
 }
 
-// NewProxyServer creates a new proxy server instance
-func NewProxyServer(port int) (*ProxyServer, error) {
+// NewServer creates a new proxy server instance
+func NewServer(port int, version string) (*Server, error) {
 	logger := log.New(log.Writer(), "[PROXY] ", log.LstdFlags)
 
 	// CONFIGURABLE: List of hostnames to block to prevent loops
@@ -35,16 +36,17 @@ func NewProxyServer(port int) (*ProxyServer, error) {
 		"dev.p.requestbite.com",
 	}
 
-	return &ProxyServer{
+	return &Server{
 		port:             port,
-		httpClient:       NewHTTPClient(),
+		httpClient:       NewHTTPClient(version),
 		logger:           logger,
 		blockedHostnames: blockedHostnames,
+		version:          version,
 	}, nil
 }
 
 // Start starts the HTTP server
-func (s *ProxyServer) Start() error {
+func (s *Server) Start() error {
 	router := mux.NewRouter()
 
 	// CORS middleware
@@ -69,7 +71,7 @@ func (s *ProxyServer) Start() error {
 }
 
 // Stop stops the HTTP server gracefully
-func (s *ProxyServer) Stop(ctx context.Context) error {
+func (s *Server) Stop(ctx context.Context) error {
 	if s.server != nil {
 		return s.server.Shutdown(ctx)
 	}
@@ -77,7 +79,7 @@ func (s *ProxyServer) Stop(ctx context.Context) error {
 }
 
 // isLoopbackRequest checks if a request URL would create a loop back to this proxy
-func (s *ProxyServer) isLoopbackRequest(targetURL string) bool {
+func (s *Server) isLoopbackRequest(targetURL string) bool {
 	// Parse the target URL
 	parsedURL, err := url.Parse(targetURL)
 	if err != nil {
@@ -97,7 +99,7 @@ func (s *ProxyServer) isLoopbackRequest(targetURL string) bool {
 }
 
 // isBlockedHostname checks if a hostname is in the blocked list
-func (s *ProxyServer) isBlockedHostname(hostname string) bool {
+func (s *Server) isBlockedHostname(hostname string) bool {
 	// Check against the configurable blocked hostnames list
 	for _, blockedHost := range s.blockedHostnames {
 		if strings.EqualFold(hostname, blockedHost) {
@@ -108,7 +110,7 @@ func (s *ProxyServer) isBlockedHostname(hostname string) bool {
 }
 
 // handleJSONRequest handles /proxy/request endpoint
-func (s *ProxyServer) handleJSONRequest(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleJSONRequest(w http.ResponseWriter, r *http.Request) {
 	// Handle OPTIONS for CORS preflight
 	if r.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
@@ -148,7 +150,7 @@ func (s *ProxyServer) handleJSONRequest(w http.ResponseWriter, r *http.Request) 
 
 	// Substitute path parameters if provided
 	if req.PathParams != nil {
-		req.URL = s.httpClient.substitutePathParams(req.URL, req.PathParams)
+		req.URL = s.httpClient.SubstitutePathParams(req.URL, req.PathParams)
 	}
 
 	// Check for self-loop AFTER path parameter substitution
@@ -214,7 +216,7 @@ func (s *ProxyServer) handleJSONRequest(w http.ResponseWriter, r *http.Request) 
 }
 
 // handleFormRequest handles /proxy/form endpoint
-func (s *ProxyServer) handleFormRequest(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleFormRequest(w http.ResponseWriter, r *http.Request) {
 	// Handle OPTIONS for CORS preflight
 	if r.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
@@ -323,7 +325,7 @@ func (s *ProxyServer) handleFormRequest(w http.ResponseWriter, r *http.Request) 
 }
 
 // handleHealthCheck handles the health check endpoint
-func (s *ProxyServer) handleHealthCheck(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 	// Handle OPTIONS for CORS preflight
 	if r.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
@@ -335,15 +337,15 @@ func (s *ProxyServer) handleHealthCheck(w http.ResponseWriter, r *http.Request) 
 
 	healthResponse := map[string]interface{}{
 		"status":     "ok",
-		"version":    Version,
-		"user-agent": fmt.Sprintf("rb-slingshot/%s (https://requestbite.com/slingshot)", Version),
+		"version":    s.version,
+		"user-agent": fmt.Sprintf("rb-slingshot/%s (https://requestbite.com/slingshot)", s.version),
 	}
 
 	json.NewEncoder(w).Encode(healthResponse)
 }
 
 // corsMiddleware adds CORS headers
-func (s *ProxyServer) corsMiddleware(next http.Handler) http.Handler {
+func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
@@ -356,7 +358,7 @@ func (s *ProxyServer) corsMiddleware(next http.Handler) http.Handler {
 }
 
 // loggingMiddleware logs incoming requests
-func (s *ProxyServer) loggingMiddleware(next http.Handler) http.Handler {
+func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
@@ -389,7 +391,7 @@ func (w *responseWriter) Flush() {
 }
 
 // writeErrorResponse writes a standardized error response
-func (s *ProxyServer) writeErrorResponse(w http.ResponseWriter, errorType, errorTitle, errorMessage string) {
+func (s *Server) writeErrorResponse(w http.ResponseWriter, errorType, errorTitle, errorMessage string) {
 	response := &ProxyResponse{
 		Success:      false,
 		ErrorType:    errorType,
@@ -405,7 +407,7 @@ func (s *ProxyServer) writeErrorResponse(w http.ResponseWriter, errorType, error
 }
 
 // writeLoopErrorResponse writes an error response for loop detection with HTTP 508 status
-func (s *ProxyServer) writeLoopErrorResponse(w http.ResponseWriter, errorMessage string) {
+func (s *Server) writeLoopErrorResponse(w http.ResponseWriter, errorMessage string) {
 	response := &ProxyResponse{
 		Success:      false,
 		ErrorType:    LoopDetectedError.Type,

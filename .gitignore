@@ -5,10 +5,10 @@ dist/
 SHA256SUMS
 
 # Binaries
-requestbite-proxy
-requestbite-proxy.exe
-proxy
-proxy-go
+/requestbite-proxy
+/requestbite-proxy.exe
+/proxy-go
+/proxy
 
 # Go build cache
 *.test

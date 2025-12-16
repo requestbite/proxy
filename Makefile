@@ -1,8 +1,8 @@
 # RequestBite Proxy Makefile
 # Cross-platform build automation for macOS, Linux, and Windows
 
-# Extract version from main.go
-VERSION := $(shell grep 'Version.*=' main.go | head -1 | sed 's/.*"\(.*\)".*/\1/')
+# Extract version from cmd/requestbite-proxy/main.go
+VERSION := $(shell grep 'Version.*=' cmd/requestbite-proxy/main.go | head -1 | sed 's/.*"\(.*\)".*/\1/')
 
 # Binary name
 BINARY_NAME := requestbite-proxy
@@ -43,7 +43,7 @@ all: build
 # Build for current platform (development)
 build:
 	@echo "$(COLOR_BOLD)$(COLOR_BLUE)Building $(BINARY_NAME) v$(VERSION) for current platform...$(COLOR_RESET)"
-	CGO_ENABLED=0 go build $(BUILD_FLAGS) -o $(BINARY_NAME) .
+	CGO_ENABLED=0 go build $(BUILD_FLAGS) -o $(BINARY_NAME) ./cmd/requestbite-proxy
 	@echo "$(COLOR_GREEN)✓ Build complete: $(BINARY_NAME)$(COLOR_RESET)"
 
 # Build for all platforms
@@ -63,7 +63,7 @@ define build_platform
 	$(eval ARCH := $(word 2,$(subst /, ,$(1))))
 	$(eval OUTPUT := $(DIST_DIR)/$(BINARY_NAME)-$(VERSION)-$(OS)-$(ARCH)$(if $(filter windows,$(OS)),.exe,))
 	@echo "  Building for $(OS)/$(ARCH)..."
-	@CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) go build $(BUILD_FLAGS) -o $(OUTPUT) .
+	@CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) go build $(BUILD_FLAGS) -o $(OUTPUT) ./cmd/requestbite-proxy
 endef
 
 # Create release archives and checksums

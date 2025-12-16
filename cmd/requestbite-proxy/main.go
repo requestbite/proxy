@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+
+	"github.com/requestbite/proxy-go/internal/proxy"
 )
 
 const (
@@ -49,7 +51,7 @@ func main() {
 	}
 
 	// Start the proxy server
-	server, err := NewProxyServer(*port)
+	server, err := proxy.NewServer(*port, Version)
 	if err != nil {
 		log.Fatalf("Failed to create proxy server: %v", err)
 	}

@@ -1,0 +1,104 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags like v0.4.0, v1.0.0, etc.
+
+permissions:
+  contents: write  # Required for creating releases
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for proper version detection
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          # Remove 'v' prefix from tag to get version
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Build all platforms
+        run: make build-all
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+
+      - name: Create release archives
+        run: make release
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          # Extract the latest version changes from CHANGELOG.md
+          VERSION=${{ steps.version.outputs.version }}
+
+          # Create release notes
+          cat > release_notes.md << 'EOF'
+          ## RequestBite Proxy v${{ steps.version.outputs.version }}
+
+          ### Installation
+
+          **Quick Install (macOS/Linux):**
+          ```bash
+          curl -fsSL https://raw.githubusercontent.com/requestbite/requestbite-proxy/main/install.sh | bash
+          ```
+
+          **Manual Installation:**
+          Download the appropriate binary for your platform below, extract it, and add to your PATH.
+
+          **Verify checksums:**
+          ```bash
+          sha256sum -c SHA256SUMS
+          ```
+
+          ### Supported Platforms
+          - macOS (Intel & Apple Silicon)
+          - Linux x86_64
+          - Windows x86_64
+
+          ---
+
+          For full changelog, see [CHANGELOG.md](https://github.com/requestbite/requestbite-proxy/blob/main/CHANGELOG.md)
+          EOF
+
+          echo "Release notes generated"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release v${{ steps.version.outputs.version }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/SHA256SUMS
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts-${{ steps.version.outputs.version }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/SHA256SUMS
+          retention-days: 30

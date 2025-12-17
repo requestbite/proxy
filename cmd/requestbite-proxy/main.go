@@ -14,7 +14,7 @@ const (
 )
 
 var (
-	Version   = "0.3.0"     // Injected by build system
+	Version   = "dev"       // Injected by build system from git tag
 	BuildTime = "unknown"   // Injected by build system
 	GitCommit = "unknown"   // Injected by build system
 )

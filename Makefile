@@ -1,8 +1,10 @@
 # RequestBite Proxy Makefile
 # Cross-platform build automation for macOS, Linux, and Windows
 
-# Extract version from cmd/requestbite-proxy/main.go
-VERSION := $(shell grep 'Version.*=' cmd/requestbite-proxy/main.go | head -1 | sed 's/.*"\(.*\)".*/\1/')
+# Extract version from git tag (strip 'v' prefix), fallback to "dev"
+# If on a tag like v1.2.3, VERSION = 1.2.3
+# If not on a tag, VERSION = dev
+VERSION := $(shell if git describe --tags --exact-match 2>/dev/null >/dev/null; then git describe --tags --exact-match | sed 's/^v//'; else echo "dev"; fi)
 
 # Binary name
 BINARY_NAME := requestbite-proxy

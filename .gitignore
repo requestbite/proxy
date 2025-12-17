@@ -4,6 +4,10 @@ dist/
 *.zip
 SHA256SUMS
 
+# Air hot reload
+tmp/
+build-errors.log
+
 # Binaries
 /requestbite-proxy
 /requestbite-proxy.exe

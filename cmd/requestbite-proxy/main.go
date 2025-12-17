@@ -23,7 +23,7 @@ func main() {
 	// Command line flags
 	var (
 		port             = flag.Int("port", DefaultPort, "Port to listen on")
-		enableLocalFiles = flag.Bool("enable-local-files", false, "Enable local file serving via /file endpoint")
+		enableLocalFiles = flag.Bool("enable-local-files", false, "Enable local file and directory serving")
 		showVersion      = flag.Bool("version", false, "Show version information")
 		showHelp         = flag.Bool("help", false, "Show help information")
 	)
@@ -59,7 +59,7 @@ func main() {
 
 	fmt.Printf("RequestBite Slingshot Proxy listening on port %d\n", *port)
 	if *enableLocalFiles {
-		fmt.Println("⚠ Local file serving enabled via /file endpoint")
+		fmt.Println("\033[33mWarning:\033[0m Local file and dir serving enabled via /file and /dir endpoints")
 	}
 	fmt.Println("Press Ctrl+C to stop")
 

@@ -37,6 +37,7 @@ COLOR_RESET := \033[0m
 COLOR_BOLD := \033[1m
 COLOR_GREEN := \033[32m
 COLOR_BLUE := \033[34m
+COLOR_YELLOW := \033[33m
 
 .PHONY: all build build-all release clean install dev help
 
@@ -137,7 +138,7 @@ install: build
 	@if echo "$$PATH" | grep -q "$$HOME/.local/bin"; then \
 		echo "Ready to use: $(BINARY_NAME) --version"; \
 	else \
-		echo "⚠ Warning: ~/.local/bin is not in your PATH"; \
+		echo "$(COLOR_YELLOW)Warning:$(COLOR_RESET) ~/.local/bin is not in your PATH"; \
 		echo "Add to PATH: export PATH=\"\$$HOME/.local/bin:\$$PATH\""; \
 	fi
 

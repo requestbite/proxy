@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -64,6 +66,7 @@ func (s *Server) Start() error {
 	router.HandleFunc("/proxy/request", s.handleJSONRequest).Methods("POST", "OPTIONS")
 	router.HandleFunc("/proxy/form", s.handleFormRequest).Methods("POST", "OPTIONS")
 	router.HandleFunc("/file", s.handleFileRequest).Methods("POST", "OPTIONS")
+	router.HandleFunc("/dir", s.handleDirectoryRequest).Methods("POST", "OPTIONS")
 
 	// Health check endpoint
 	router.HandleFunc("/health", s.handleHealthCheck).Methods("GET", "OPTIONS")
@@ -539,4 +542,130 @@ func (s *Server) detectMimeType(filePath string, data []byte) string {
 	}
 
 	return mimeType
+}
+
+// getDefaultRoot returns the platform-specific root directory
+func (s *Server) getDefaultRoot() string {
+	if runtime.GOOS == "windows" {
+		return "C:\\"
+	}
+	return "/"
+}
+
+// sortDirectoryEntries sorts directory entries (directories first, then alphabetically)
+func sortDirectoryEntries(entries []DirectoryEntry) {
+	sort.Slice(entries, func(i, j int) bool {
+		// Directories come before files
+		if entries[i].Type != entries[j].Type {
+			return entries[i].Type == "directory"
+		}
+		// Within same type, sort alphabetically (case-insensitive)
+		return strings.ToLower(entries[i].Name) < strings.ToLower(entries[j].Name)
+	})
+}
+
+// handleDirectoryRequest handles /dir endpoint for directory listing
+func (s *Server) handleDirectoryRequest(w http.ResponseWriter, r *http.Request) {
+	// Handle OPTIONS for CORS preflight
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Check if feature is enabled
+	if !s.enableLocalFiles {
+		w.WriteHeader(http.StatusNotFound)
+		s.logger.Printf("Directory endpoint accessed but feature is disabled")
+		return
+	}
+
+	// Parse request body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		s.writeErrorResponse(w, "request_format_error", "Failed to read request body", err.Error())
+		return
+	}
+
+	var req DirectoryRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		s.writeErrorResponse(w, "request_format_error", "Invalid JSON", fmt.Sprintf("Failed to parse JSON request: %v", err))
+		return
+	}
+
+	// Determine target path
+	var targetPath string
+	if req.Path == nil {
+		// Use platform-specific root
+		targetPath = s.getDefaultRoot()
+	} else {
+		targetPath = *req.Path
+	}
+
+	// Clean the path
+	cleanPath := filepath.Clean(targetPath)
+
+	// Security check: Ensure path is absolute (unless it's the root)
+	if !filepath.IsAbs(cleanPath) {
+		w.Header().Set("Content-Type", "application/json")
+		s.writeErrorResponse(w, FileAccessError.Type, FileAccessError.Title, "Path must be absolute")
+		return
+	}
+
+	s.logger.Printf("Directory request: %s", cleanPath)
+
+	// Check if path exists
+	fileInfo, err := os.Stat(cleanPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			w.WriteHeader(http.StatusNotFound)
+			w.Header().Set("Content-Type", "application/json")
+			s.writeErrorResponse(w, FileNotFoundError.Type, FileNotFoundError.Title, fmt.Sprintf("Directory not found: %s", cleanPath))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		s.writeErrorResponse(w, FileAccessError.Type, FileAccessError.Title, fmt.Sprintf("Cannot access path: %v", err))
+		return
+	}
+
+	// Check if it's a directory
+	if !fileInfo.IsDir() {
+		w.Header().Set("Content-Type", "application/json")
+		s.writeErrorResponse(w, FileAccessError.Type, FileAccessError.Title, "Path is a file, not a directory")
+		return
+	}
+
+	// Read directory contents
+	entries, err := os.ReadDir(cleanPath)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		s.writeErrorResponse(w, FileAccessError.Type, FileAccessError.Title, fmt.Sprintf("Failed to read directory: %v", err))
+		return
+	}
+
+	// Build response array
+	var dirEntries []DirectoryEntry
+	for _, entry := range entries {
+		entryType := "file"
+		if entry.IsDir() {
+			entryType = "directory"
+		}
+
+		dirEntries = append(dirEntries, DirectoryEntry{
+			Name: entry.Name(),
+			Type: entryType,
+		})
+	}
+
+	// Sort entries (directories first, then alphabetically)
+	sortDirectoryEntries(dirEntries)
+
+	// Return JSON array
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(dirEntries); err != nil {
+		s.logger.Printf("Failed to encode directory response: %v", err)
+	}
+
+	s.logger.Printf("Listed directory: %s (%d entries)", cleanPath, len(dirEntries))
 }

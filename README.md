@@ -215,6 +215,104 @@ File not found:
 }
 ```
 
+### POST /dir
+
+Lists files and directories in a specified path. **This endpoint is disabled by default** and must be explicitly enabled with the `--enable-local-files` flag.
+
+**⚠️ Security Warning:** Only enable this feature in trusted environments. This allows the proxy to list directory contents accessible to the process user.
+
+**Request Body:**
+
+```json
+{
+  "path": "/home/user"
+}
+```
+
+For root directory, use `null`:
+```json
+{
+  "path": null
+}
+```
+
+**Response:**
+
+Returns a JSON array of directory entries sorted with directories first, then files, alphabetically within each group:
+
+```json
+[
+  {
+    "name": "Documents",
+    "type": "directory"
+  },
+  {
+    "name": "Downloads",
+    "type": "directory"
+  },
+  {
+    "name": "file.txt",
+    "type": "file"
+  },
+  {
+    "name": "photo.jpg",
+    "type": "file"
+  }
+]
+```
+
+**Platform Defaults:**
+
+When `path` is `null`, the endpoint returns the root directory for the platform:
+- **Unix/Linux/macOS**: `/`
+- **Windows**: `C:\`
+
+**Example:**
+
+```bash
+# Enable local file serving
+requestbite-proxy --enable-local-files
+
+# List directory contents
+curl -X POST http://localhost:8080/dir \
+  -H "Content-Type: application/json" \
+  -d '{"path": "/home/user/Documents"}'
+
+# List root directory
+curl -X POST http://localhost:8080/dir \
+  -H "Content-Type: application/json" \
+  -d '{"path": null}'
+```
+
+**Error Responses:**
+
+The `/dir` endpoint uses the same error response format as the `/file` endpoint:
+
+When feature is disabled (404):
+```
+(Empty response body with 404 status)
+```
+
+Directory not found:
+```json
+{
+  "success": false,
+  "error_type": "file_not_found",
+  "error_title": "File Not Found",
+  "error_message": "Directory not found: /path/to/dir"
+}
+```
+
+Path is not a directory:
+```json
+{
+  "success": false,
+  "error_type": "file_access_error",
+  "error_title": "File Access Error",
+  "error_message": "Path is not a directory: /path/to/file.txt"
+}
+```
+
 ## Testing
 
 Run the functionality tests:

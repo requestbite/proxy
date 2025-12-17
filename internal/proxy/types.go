@@ -35,6 +35,17 @@ type FileRequest struct {
 	Path string `json:"path"`
 }
 
+// DirectoryRequest represents a directory listing request
+type DirectoryRequest struct {
+	Path *string `json:"path"` // Pointer to allow null detection
+}
+
+// DirectoryEntry represents a file or directory entry
+type DirectoryEntry struct {
+	Name string `json:"name"`
+	Type string `json:"type"` // "file" or "directory"
+}
+
 // ProxyResponse represents the response structure matching the Lua API
 type ProxyResponse struct {
 	Success         bool              `json:"success"`

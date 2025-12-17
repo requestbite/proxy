@@ -158,6 +158,63 @@ Executes form-based HTTP requests.
 **Form Data:**
 Standard form data in request body.
 
+### POST /file
+
+Serves local files from the filesystem. **This endpoint is disabled by default** and must be explicitly enabled with the `--enable-local-files` flag for security reasons.
+
+**⚠️ Security Warning:** Only enable this feature in trusted environments. This allows the proxy to read any file accessible to the process user.
+
+**Request Body:**
+
+```json
+{
+  "path": "/absolute/path/to/file.txt"
+}
+```
+
+**Request Fields:**
+- `path`: Absolute path to the file (required). Works with both Unix-style (`/home/user/file.txt`) and Windows-style (`C:\Users\user\file.txt`) paths.
+
+**Response:**
+- **Success (200)**: Returns the raw file content with appropriate `Content-Type` header based on file extension and content detection
+- **Not Found (404)**: File doesn't exist or feature is disabled
+- **Error**: JSON error response for invalid paths, directories, or access errors
+
+**Example:**
+
+```bash
+# Enable local file serving
+requestbite-proxy --enable-local-files
+
+# Request a file
+curl -X POST http://localhost:8080/file \
+  -H "Content-Type: application/json" \
+  -d '{"path": "/home/user/document.pdf"}'
+```
+
+**Supported Scenarios:**
+- Text files (`.txt`, `.json`, `.xml`, etc.) - served with appropriate text MIME types
+- Images (`.png`, `.jpg`, `.gif`, etc.) - served with image MIME types
+- Documents (`.pdf`, `.docx`, etc.) - served with document MIME types
+- Binary files - served as `application/octet-stream`
+
+**Error Responses:**
+
+When feature is disabled (404):
+```
+(Empty response body with 404 status)
+```
+
+File not found:
+```json
+{
+  "success": false,
+  "error_type": "file_not_found",
+  "error_title": "File Not Found",
+  "error_message": "File not found: /path/to/file.txt"
+}
+```
+
 ## Testing
 
 Run the functionality tests:
@@ -198,12 +255,21 @@ CLI version of proxy.
 
 ## Configuration
 
-Environment variables and configuration options can be added as needed.
-Currently supports:
+Command-line flags:
 
 - `-port`: Server port (default: 8080)
+- `-enable-local-files`: Enable local file serving via `/file` endpoint (default: false, **disabled for security**)
 - `-help`: Show help information
 - `-version`: Show version information
+
+**Example:**
+```bash
+# Run with default settings
+requestbite-proxy
+
+# Run on custom port with local file serving enabled
+requestbite-proxy -port 3000 -enable-local-files
+```
 
 ## Error Types
 
@@ -215,6 +281,9 @@ The proxy returns standardized error responses:
 - `redirect_not_followed`: Redirect encountered but `followRedirects: false`
 - `request_format_error`: Invalid JSON or missing required fields
 - `loop_detected`: If proxy is called to call itself
+- `file_not_found`: Requested file does not exist (404)
+- `file_access_error`: Cannot access file (permissions, is directory, etc.)
+- `feature_disabled`: Attempted to use disabled feature
 
 ## Monitoring
 

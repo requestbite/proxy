@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -23,10 +26,11 @@ type Server struct {
 	logger           *log.Logger
 	blockedHostnames []string // Configurable list of hostnames to block (prevents loops)
 	version          string   // Version for health endpoint
+	enableLocalFiles bool     // Enable local file serving via /file endpoint
 }
 
 // NewServer creates a new proxy server instance
-func NewServer(port int, version string) (*Server, error) {
+func NewServer(port int, version string, enableLocalFiles bool) (*Server, error) {
 	logger := log.New(log.Writer(), "[PROXY] ", log.LstdFlags)
 
 	// CONFIGURABLE: List of hostnames to block to prevent loops
@@ -42,6 +46,7 @@ func NewServer(port int, version string) (*Server, error) {
 		logger:           logger,
 		blockedHostnames: blockedHostnames,
 		version:          version,
+		enableLocalFiles: enableLocalFiles,
 	}, nil
 }
 
@@ -58,6 +63,7 @@ func (s *Server) Start() error {
 	// API endpoints
 	router.HandleFunc("/proxy/request", s.handleJSONRequest).Methods("POST", "OPTIONS")
 	router.HandleFunc("/proxy/form", s.handleFormRequest).Methods("POST", "OPTIONS")
+	router.HandleFunc("/file", s.handleFileRequest).Methods("POST", "OPTIONS")
 
 	// Health check endpoint
 	router.HandleFunc("/health", s.handleHealthCheck).Methods("GET", "OPTIONS")
@@ -420,4 +426,117 @@ func (s *Server) writeLoopErrorResponse(w http.ResponseWriter, errorMessage stri
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		s.logger.Printf("Failed to encode loop error response: %v", err)
 	}
+}
+
+// handleFileRequest handles /file endpoint for local file serving
+func (s *Server) handleFileRequest(w http.ResponseWriter, r *http.Request) {
+	// Handle OPTIONS for CORS preflight
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Check if feature is enabled
+	if !s.enableLocalFiles {
+		w.WriteHeader(http.StatusNotFound)
+		s.logger.Printf("File endpoint accessed but feature is disabled")
+		return
+	}
+
+	// Parse request body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		s.writeErrorResponse(w, "request_format_error", "Failed to read request body", err.Error())
+		return
+	}
+
+	var req FileRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		s.writeErrorResponse(w, "request_format_error", "Invalid JSON", fmt.Sprintf("Failed to parse JSON request: %v", err))
+		return
+	}
+
+	// Validate required fields
+	if req.Path == "" {
+		w.Header().Set("Content-Type", "application/json")
+		s.writeErrorResponse(w, "request_format_error", "Missing path", "File path is required")
+		return
+	}
+
+	// Clean and validate the path
+	cleanPath := filepath.Clean(req.Path)
+
+	// Security check: Ensure path is absolute
+	if !filepath.IsAbs(cleanPath) {
+		w.Header().Set("Content-Type", "application/json")
+		s.writeErrorResponse(w, FileAccessError.Type, FileAccessError.Title, "Path must be absolute")
+		return
+	}
+
+	s.logger.Printf("File request: %s", cleanPath)
+
+	// Check if file exists and is accessible
+	fileInfo, err := os.Stat(cleanPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			w.WriteHeader(http.StatusNotFound)
+			w.Header().Set("Content-Type", "application/json")
+			s.writeErrorResponse(w, FileNotFoundError.Type, FileNotFoundError.Title, fmt.Sprintf("File not found: %s", cleanPath))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		s.writeErrorResponse(w, FileAccessError.Type, FileAccessError.Title, fmt.Sprintf("Cannot access file: %v", err))
+		return
+	}
+
+	// Check if it's a directory
+	if fileInfo.IsDir() {
+		w.Header().Set("Content-Type", "application/json")
+		s.writeErrorResponse(w, FileAccessError.Type, FileAccessError.Title, "Path is a directory, not a file")
+		return
+	}
+
+	// Read the file
+	fileData, err := os.ReadFile(cleanPath)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		s.writeErrorResponse(w, FileAccessError.Type, FileAccessError.Title, fmt.Sprintf("Failed to read file: %v", err))
+		return
+	}
+
+	// Detect MIME type
+	mimeType := s.detectMimeType(cleanPath, fileData)
+
+	// Set the appropriate Content-Type header
+	w.Header().Set("Content-Type", mimeType)
+
+	// Write the file content directly (pass-through mode)
+	if _, err := w.Write(fileData); err != nil {
+		s.logger.Printf("Failed to write file response: %v", err)
+	}
+
+	s.logger.Printf("Served file: %s (%d bytes, %s)", cleanPath, len(fileData), mimeType)
+}
+
+// detectMimeType detects the MIME type of a file based on extension and content
+func (s *Server) detectMimeType(filePath string, data []byte) string {
+	// First try to detect by file extension
+	ext := strings.ToLower(filepath.Ext(filePath))
+	mimeType := mime.TypeByExtension(ext)
+
+	if mimeType != "" {
+		return mimeType
+	}
+
+	// If extension-based detection fails, use content-based detection
+	mimeType = http.DetectContentType(data)
+
+	// Return the detected MIME type, or default to application/octet-stream
+	if mimeType == "" {
+		return "application/octet-stream"
+	}
+
+	return mimeType
 }

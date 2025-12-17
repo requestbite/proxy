@@ -22,9 +22,10 @@ var (
 func main() {
 	// Command line flags
 	var (
-		port        = flag.Int("port", DefaultPort, "Port to listen on")
-		showVersion = flag.Bool("version", false, "Show version information")
-		showHelp    = flag.Bool("help", false, "Show help information")
+		port             = flag.Int("port", DefaultPort, "Port to listen on")
+		enableLocalFiles = flag.Bool("enable-local-files", false, "Enable local file serving via /file endpoint")
+		showVersion      = flag.Bool("version", false, "Show version information")
+		showHelp         = flag.Bool("help", false, "Show help information")
 	)
 	flag.Parse()
 
@@ -51,12 +52,15 @@ func main() {
 	}
 
 	// Start the proxy server
-	server, err := proxy.NewServer(*port, Version)
+	server, err := proxy.NewServer(*port, Version, *enableLocalFiles)
 	if err != nil {
 		log.Fatalf("Failed to create proxy server: %v", err)
 	}
 
 	fmt.Printf("RequestBite Slingshot Proxy listening on port %d\n", *port)
+	if *enableLocalFiles {
+		fmt.Println("⚠ Local file serving enabled via /file endpoint")
+	}
 	fmt.Println("Press Ctrl+C to stop")
 
 	if err := server.Start(); err != nil {

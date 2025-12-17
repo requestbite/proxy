@@ -30,6 +30,11 @@ type FormProxyRequest struct {
 	RawBody         []byte `json:"-"` // For multipart data, exclude from JSON
 }
 
+// FileRequest represents a local file request
+type FileRequest struct {
+	Path string `json:"path"`
+}
+
 // ProxyResponse represents the response structure matching the Lua API
 type ProxyResponse struct {
 	Success         bool              `json:"success"`
@@ -104,6 +109,18 @@ var (
 	StreamingTimeoutError = &ProxyError{
 		Type:  "request_timeout",
 		Title: "Streaming Request Timeout",
+	}
+	FileNotFoundError = &ProxyError{
+		Type:  "file_not_found",
+		Title: "File Not Found",
+	}
+	FileAccessError = &ProxyError{
+		Type:  "file_access_error",
+		Title: "File Access Error",
+	}
+	FeatureDisabledError = &ProxyError{
+		Type:  "feature_disabled",
+		Title: "Feature Disabled",
 	}
 )
 

@@ -1,4 +1,5 @@
 # Build artifacts
+build/
 dist/
 *.tar.gz
 *.zip
@@ -8,7 +9,7 @@ SHA256SUMS
 tmp/
 build-errors.log
 
-# Binaries
+# Legacy binaries (for backwards compatibility)
 /requestbite-proxy
 /requestbite-proxy.exe
 /proxy-go

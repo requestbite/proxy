@@ -28,7 +28,8 @@ PLATFORMS := \
 	linux/amd64 \
 	windows/amd64
 
-# Output directory
+# Output directories
+BUILD_DIR := build
 DIST_DIR := dist
 
 # Colors for output
@@ -45,25 +46,26 @@ all: build
 # Build for current platform (development)
 build:
 	@echo "$(COLOR_BOLD)$(COLOR_BLUE)Building $(BINARY_NAME) v$(VERSION) for current platform...$(COLOR_RESET)"
-	CGO_ENABLED=0 go build $(BUILD_FLAGS) -o $(BINARY_NAME) ./cmd/requestbite-proxy
-	@echo "$(COLOR_GREEN)✓ Build complete: $(BINARY_NAME)$(COLOR_RESET)"
+	@mkdir -p $(BUILD_DIR)
+	CGO_ENABLED=0 go build $(BUILD_FLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/requestbite-proxy
+	@echo "$(COLOR_GREEN)✓ Build complete: $(BUILD_DIR)/$(BINARY_NAME)$(COLOR_RESET)"
 
 # Build for all platforms
 build-all: clean
 	@echo "$(COLOR_BOLD)$(COLOR_BLUE)Building $(BINARY_NAME) v$(VERSION) for all platforms...$(COLOR_RESET)"
-	@mkdir -p $(DIST_DIR)
+	@mkdir -p $(BUILD_DIR)
 	@$(foreach platform,$(PLATFORMS),\
 		$(call build_platform,$(platform)))
 	@echo "$(COLOR_GREEN)✓ All builds complete$(COLOR_RESET)"
 	@echo ""
 	@echo "Built binaries:"
-	@ls -lh $(DIST_DIR)/$(BINARY_NAME)-*
+	@ls -lh $(BUILD_DIR)/$(BINARY_NAME)-*
 
 # Build for a specific platform (internal function)
 define build_platform
 	$(eval OS := $(word 1,$(subst /, ,$(1))))
 	$(eval ARCH := $(word 2,$(subst /, ,$(1))))
-	$(eval OUTPUT := $(DIST_DIR)/$(BINARY_NAME)-$(VERSION)-$(OS)-$(ARCH)$(if $(filter windows,$(OS)),.exe,))
+	$(eval OUTPUT := $(BUILD_DIR)/$(BINARY_NAME)-$(VERSION)-$(OS)-$(ARCH)$(if $(filter windows,$(OS)),.exe,))
 	@echo "  Building for $(OS)/$(ARCH)..."
 	@CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) go build $(BUILD_FLAGS) -o $(OUTPUT) ./cmd/requestbite-proxy
 endef
@@ -72,7 +74,8 @@ endef
 release: build-all
 	@echo ""
 	@echo "$(COLOR_BOLD)$(COLOR_BLUE)Creating release archives...$(COLOR_RESET)"
-	@cd $(DIST_DIR) && \
+	@mkdir -p $(DIST_DIR)
+	@cd $(BUILD_DIR) && \
 	for binary in $(BINARY_NAME)-$(VERSION)-*; do \
 		if [ -f "$$binary" ]; then \
 			base=$$(basename "$$binary"); \
@@ -83,7 +86,7 @@ release: build-all
 				echo "  Creating $$archive..."; \
 				cp ../LICENSE . 2>/dev/null || true; \
 				cp ../README.md . 2>/dev/null || true; \
-				zip -q "$$archive" "$$binary" LICENSE README.md 2>/dev/null || zip -q "$$archive" "$$binary"; \
+				zip -q "../$(DIST_DIR)/$$archive" "$$binary" LICENSE README.md 2>/dev/null || zip -q "../$(DIST_DIR)/$$archive" "$$binary"; \
 				rm -f LICENSE README.md; \
 			else \
 				archive="$(BINARY_NAME)-$(VERSION)-$$os_arch.tar.gz"; \
@@ -93,7 +96,7 @@ release: build-all
 				cp "$$binary" "$$temp_dir/$(BINARY_NAME)"; \
 				cp ../LICENSE "$$temp_dir/" 2>/dev/null || true; \
 				cp ../README.md "$$temp_dir/" 2>/dev/null || true; \
-				tar -czf "$$archive" "$$temp_dir"; \
+				tar -czf "../$(DIST_DIR)/$$archive" "$$temp_dir"; \
 				rm -rf "$$temp_dir"; \
 			fi; \
 		fi; \
@@ -117,9 +120,9 @@ release: build-all
 # Clean build artifacts
 clean:
 	@echo "$(COLOR_BOLD)$(COLOR_BLUE)Cleaning build artifacts...$(COLOR_RESET)"
+	@rm -rf $(BUILD_DIR)
 	@rm -rf $(DIST_DIR)
 	@rm -rf tmp/
-	@rm -f $(BINARY_NAME) $(BINARY_NAME).exe
 	@rm -f build-errors.log
 	@echo "$(COLOR_GREEN)✓ Clean complete$(COLOR_RESET)"
 
@@ -127,7 +130,7 @@ clean:
 install: build
 	@echo "$(COLOR_BOLD)$(COLOR_BLUE)Installing $(BINARY_NAME) to ~/.local/bin...$(COLOR_RESET)"
 	@mkdir -p ~/.local/bin
-	@cp $(BINARY_NAME) ~/.local/bin/
+	@cp $(BUILD_DIR)/$(BINARY_NAME) ~/.local/bin/
 	@chmod +x ~/.local/bin/$(BINARY_NAME)
 	@echo "$(COLOR_GREEN)✓ Installed to ~/.local/bin/$(BINARY_NAME)$(COLOR_RESET)"
 	@echo ""

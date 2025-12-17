@@ -1,0 +1,731 @@
+openapi: 3.1.0
+info:
+  title: RequestBite Slingshot Proxy API
+  version: 1.0.0
+  description: |
+    RequestBite Slingshot is a HTTP proxy service that forwards requests to external APIs and services.
+    It supports various request types including JSON, form data, and multipart form data, with features like
+    streaming responses, custom headers, and loop prevention.
+
+    The proxy includes security features to prevent infinite loops by detecting rb-slingshot User-Agent
+    headers and blocking requests to configured proxy hostnames.
+  contact:
+    name: RequestBite
+    url: https://requestbite.com/slingshot
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://p.requestbite.com
+    description: Production proxy server
+
+tags:
+  - name: proxy
+    description: HTTP proxy operations for forwarding requests
+  - name: files
+    description: Local file system operations (requires --enable-local-files flag)
+  - name: health
+    description: Service health and status checks
+
+paths:
+  /proxy/request:
+    post:
+      tags:
+        - proxy
+      summary: Execute a JSON-based HTTP request
+      description: |
+        Forwards an HTTP request to a specified URL with full control over method, headers, body, and query parameters.
+        Supports both standard and streaming responses, as well as pass-through mode for raw response bodies.
+
+        **Loop Prevention**: Requests are blocked if they would create an infinite loop back to the proxy.
+      operationId: proxyRequest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProxyRequest'
+            examples:
+              simpleGet:
+                summary: Simple GET request
+                value:
+                  method: GET
+                  url: https://api.example.com/users
+                  timeout: 30
+              postWithBody:
+                summary: POST request with JSON body
+                value:
+                  method: POST
+                  url: https://api.example.com/users
+                  headers:
+                    Content-Type: application/json
+                    Authorization: Bearer token123
+                  body:
+                    name: John Doe
+                    email: john@example.com
+                  timeout: 60
+              getWithQueryParams:
+                summary: GET with query parameters
+                value:
+                  method: GET
+                  url: https://api.example.com/search
+                  queryParams:
+                    q: search term
+                    limit: "10"
+                    offset: "0"
+                  timeout: 30
+              pathParameters:
+                summary: Request with path parameters
+                value:
+                  method: GET
+                  url: https://api.example.com/users/{userId}/posts/{postId}
+                  pathParams:
+                    userId: "123"
+                    postId: "456"
+                  timeout: 30
+              streamingRequest:
+                summary: Streaming response (e.g., SSE, chunked)
+                value:
+                  method: GET
+                  url: https://api.example.com/stream
+                  streaming: true
+                  timeout: 300
+              passThroughMode:
+                summary: Pass-through mode (returns raw response)
+                value:
+                  method: GET
+                  url: https://api.example.com/image.png
+                  passThrough: true
+                  timeout: 60
+      responses:
+        '200':
+          description: Request executed successfully (check success field for actual result)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyResponse'
+              examples:
+                successResponse:
+                  summary: Successful proxied request
+                  value:
+                    success: true
+                    statusCode: 200
+                    headers:
+                      content-type: application/json
+                      cache-control: no-cache
+                    body:
+                      id: 123
+                      name: John Doe
+                    contentType: application/json
+                    cancelled: false
+                errorResponse:
+                  summary: Failed proxied request
+                  value:
+                    success: false
+                    errorType: connection_error
+                    errorTitle: Connection Failed
+                    errorMessage: "dial tcp: lookup api.example.com: no such host"
+                    cancelled: false
+                timeoutResponse:
+                  summary: Request timeout
+                  value:
+                    success: false
+                    errorType: timeout_error
+                    errorTitle: Request Timeout
+                    errorMessage: "context deadline exceeded"
+                    cancelled: false
+            text/event-stream:
+              schema:
+                type: string
+                description: Server-Sent Events stream (when streaming=true)
+              example: |
+                data: {"message": "chunk 1"}
+
+                data: {"message": "chunk 2"}
+        '508':
+          description: Loop detected - request would create an infinite loop
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyResponse'
+              example:
+                success: false
+                errorType: loop_detected
+                errorTitle: Loop Detected
+                errorMessage: Request could create an infinite loop to this proxy server
+                cancelled: false
+    options:
+      tags:
+        - proxy
+      summary: CORS preflight for /proxy/request
+      operationId: proxyRequestOptions
+      responses:
+        '200':
+          description: CORS preflight response
+          headers:
+            Access-Control-Allow-Origin:
+              schema:
+                type: string
+                example: "*"
+            Access-Control-Allow-Methods:
+              schema:
+                type: string
+                example: GET, POST, PUT, DELETE, OPTIONS
+            Access-Control-Allow-Headers:
+              schema:
+                type: string
+                example: Content-Type, Authorization, X-Requested-With
+
+  /proxy/form:
+    post:
+      tags:
+        - proxy
+      summary: Execute a form-based HTTP request
+      description: |
+        Forwards a form-based HTTP request (application/x-www-form-urlencoded or multipart/form-data).
+        Configuration is passed via query parameters, while form data is in the request body.
+
+        **Multipart Support**: For multipart/form-data, the raw body is preserved including boundaries and files.
+      operationId: proxyFormRequest
+      parameters:
+        - name: url
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+          description: Target URL to forward the request to
+          example: https://api.example.com/upload
+        - name: method
+          in: query
+          required: false
+          schema:
+            type: string
+            default: POST
+            enum: [GET, POST, PUT, PATCH, DELETE]
+          description: HTTP method (defaults to POST)
+        - name: contentType
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Content-Type header override
+          example: application/x-www-form-urlencoded
+        - name: headers
+          in: query
+          required: false
+          schema:
+            type: string
+          description: JSON-encoded headers object
+          example: '{"Authorization":"Bearer token123"}'
+        - name: path_params
+          in: query
+          required: false
+          schema:
+            type: string
+          description: JSON-encoded path parameters object
+          example: '{"userId":"123"}'
+        - name: timeout
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 60
+            minimum: 1
+            maximum: 600
+          description: Request timeout in seconds
+        - name: followRedirects
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+          description: Whether to follow HTTP redirects
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+            example:
+              username: john_doe
+              password: secret123
+              remember_me: "true"
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                name:
+                  type: string
+                description:
+                  type: string
+            example:
+              file: (binary)
+              name: document.pdf
+              description: Important document
+      responses:
+        '200':
+          description: Form request executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyResponse'
+              examples:
+                successfulUpload:
+                  summary: Successful file upload
+                  value:
+                    success: true
+                    statusCode: 201
+                    headers:
+                      content-type: application/json
+                    body:
+                      id: abc123
+                      filename: document.pdf
+                      size: 1048576
+                    contentType: application/json
+                    cancelled: false
+        '508':
+          description: Loop detected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyResponse'
+    options:
+      tags:
+        - proxy
+      summary: CORS preflight for /proxy/form
+      operationId: proxyFormOptions
+      responses:
+        '200':
+          description: CORS preflight response
+
+  /file:
+    post:
+      tags:
+        - files
+      summary: Serve a local file
+      description: |
+        Retrieves and serves a file from the local filesystem. Returns the raw file content with appropriate MIME type.
+
+        **Security**:
+        - Requires `--enable-local-files` flag to be enabled
+        - Only absolute paths are accepted
+        - Path traversal attempts are prevented via filepath.Clean()
+
+        **MIME Detection**: Content-Type is detected based on file extension and content analysis.
+      operationId: serveFile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileRequest'
+            examples:
+              textFile:
+                summary: Serve a text file
+                value:
+                  path: /home/user/documents/readme.txt
+              imageFile:
+                summary: Serve an image
+                value:
+                  path: /home/user/images/photo.jpg
+              jsonFile:
+                summary: Serve a JSON file
+                value:
+                  path: /var/data/config.json
+      responses:
+        '200':
+          description: File served successfully
+          content:
+            text/plain:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            application/json:
+              schema:
+                type: object
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyResponse'
+              example:
+                success: false
+                errorType: file_not_found
+                errorTitle: File Not Found
+                errorMessage: "File not found: /home/user/missing.txt"
+                cancelled: false
+        '400':
+          description: Invalid request (e.g., relative path, directory instead of file)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyResponse'
+              examples:
+                relativePath:
+                  summary: Relative path rejected
+                  value:
+                    success: false
+                    errorType: file_access_error
+                    errorTitle: File Access Error
+                    errorMessage: Path must be absolute
+                    cancelled: false
+                isDirectory:
+                  summary: Path is a directory
+                  value:
+                    success: false
+                    errorType: file_access_error
+                    errorTitle: File Access Error
+                    errorMessage: Path is a directory, not a file
+                    cancelled: false
+    options:
+      tags:
+        - files
+      summary: CORS preflight for /file
+      operationId: fileOptions
+      responses:
+        '200':
+          description: CORS preflight response
+
+  /dir:
+    post:
+      tags:
+        - files
+      summary: List directory contents
+      description: |
+        Lists files and subdirectories in a specified directory. Returns a sorted array of entries
+        (directories first, then alphabetically).
+
+        **Security**:
+        - Requires `--enable-local-files` flag to be enabled
+        - Only absolute paths are accepted
+        - Defaults to root directory (/ on Unix, C:\ on Windows) if no path provided
+      operationId: listDirectory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DirectoryRequest'
+            examples:
+              specificDirectory:
+                summary: List specific directory
+                value:
+                  path: /home/user/documents
+              rootDirectory:
+                summary: List root directory (defaults to / or C:\)
+                value:
+                  path: null
+              windowsDirectory:
+                summary: List Windows directory
+                value:
+                  path: "C:\\Users\\John\\Documents"
+      responses:
+        '200':
+          description: Directory contents retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DirectoryEntry'
+              example:
+                - name: projects
+                  type: directory
+                - name: documents
+                  type: directory
+                - name: readme.txt
+                  type: file
+                - name: config.json
+                  type: file
+        '404':
+          description: Directory not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyResponse'
+              example:
+                success: false
+                errorType: file_not_found
+                errorTitle: File Not Found
+                errorMessage: "Directory not found: /home/user/missing"
+                cancelled: false
+        '400':
+          description: Invalid request (e.g., path is a file, not a directory)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyResponse'
+              example:
+                success: false
+                errorType: file_access_error
+                errorTitle: File Access Error
+                errorMessage: Path is a file, not a directory
+                cancelled: false
+    options:
+      tags:
+        - files
+      summary: CORS preflight for /dir
+      operationId: dirOptions
+      responses:
+        '200':
+          description: CORS preflight response
+
+  /health:
+    get:
+      tags:
+        - health
+      summary: Health check endpoint
+      description: |
+        Returns the health status and version information of the proxy service.
+        This endpoint is exempt from loop detection and can be called on any hostname.
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: ok
+                version: 1.0.0
+                user-agent: "rb-slingshot/1.0.0 (https://requestbite.com/slingshot)"
+    options:
+      tags:
+        - health
+      summary: CORS preflight for /health
+      operationId: healthOptions
+      responses:
+        '200':
+          description: CORS preflight response
+
+components:
+  schemas:
+    ProxyRequest:
+      type: object
+      required:
+        - method
+        - url
+      properties:
+        method:
+          type: string
+          description: HTTP method for the request
+          enum: [GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS]
+          example: GET
+        url:
+          type: string
+          format: uri
+          description: Target URL to send the request to
+          example: https://api.example.com/users
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+          description: HTTP headers to include in the request
+          example:
+            Authorization: Bearer token123
+            Content-Type: application/json
+            User-Agent: MyApp/1.0
+        body:
+          type: object
+          description: Request body (will be JSON-encoded for application/json)
+          example:
+            name: John Doe
+            email: john@example.com
+        queryParams:
+          type: object
+          additionalProperties:
+            type: string
+          description: Query parameters to append to the URL
+          example:
+            page: "1"
+            limit: "10"
+            sort: name
+        pathParams:
+          type: object
+          additionalProperties:
+            type: string
+          description: |
+            Path parameters to substitute in the URL. Replace {paramName} in the URL with the corresponding value.
+            Substitution happens before loop detection.
+          example:
+            userId: "123"
+            resourceId: "456"
+        timeout:
+          type: integer
+          default: 60
+          minimum: 1
+          maximum: 600
+          description: Request timeout in seconds
+          example: 30
+        followRedirects:
+          type: boolean
+          default: true
+          description: Whether to automatically follow HTTP redirects
+          example: true
+        streaming:
+          type: boolean
+          default: false
+          description: |
+            Enable streaming mode for Server-Sent Events (SSE) or chunked responses.
+            Response will be streamed in real-time instead of buffered.
+          example: false
+        passThrough:
+          type: boolean
+          default: false
+          description: |
+            Pass-through mode returns the raw response body with original Content-Type header
+            instead of wrapping it in JSON. Useful for binary data, images, or HTML pages.
+          example: false
+
+    ProxyResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Whether the proxied request succeeded
+          example: true
+        statusCode:
+          type: integer
+          description: HTTP status code from the proxied response (only present on success)
+          example: 200
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+          description: Response headers from the proxied request (only present on success)
+          example:
+            content-type: application/json
+            cache-control: no-cache
+        body:
+          description: |
+            Parsed response body (JSON object/array if content-type is application/json,
+            otherwise a string). Only present on success.
+          oneOf:
+            - type: object
+            - type: array
+            - type: string
+          example:
+            id: 123
+            name: John Doe
+        contentType:
+          type: string
+          description: Content-Type of the response (only present on success)
+          example: application/json
+        rawResponseBody:
+          type: string
+          format: byte
+          description: Raw response body bytes (only used internally for pass-through mode)
+        errorType:
+          type: string
+          description: Error type code (only present on failure)
+          enum:
+            - request_format_error
+            - connection_error
+            - timeout_error
+            - unknown_error
+            - loop_detected
+            - file_not_found
+            - file_access_error
+            - streaming_timeout
+          example: connection_error
+        errorTitle:
+          type: string
+          description: Human-readable error title (only present on failure)
+          example: Connection Failed
+        errorMessage:
+          type: string
+          description: Detailed error message (only present on failure)
+          example: "dial tcp: lookup api.example.com: no such host"
+        cancelled:
+          type: boolean
+          description: Whether the request was cancelled (e.g., client disconnected)
+          example: false
+
+    FileRequest:
+      type: object
+      required:
+        - path
+      properties:
+        path:
+          type: string
+          description: Absolute path to the file to serve
+          example: /home/user/documents/file.pdf
+
+    DirectoryRequest:
+      type: object
+      properties:
+        path:
+          type: string
+          nullable: true
+          description: |
+            Absolute path to the directory to list. If null or omitted, defaults to the
+            platform-specific root directory (/ on Unix/Linux, C:\ on Windows).
+          example: /home/user/documents
+
+    DirectoryEntry:
+      type: object
+      required:
+        - name
+        - type
+      properties:
+        name:
+          type: string
+          description: Name of the file or directory
+          example: readme.txt
+        type:
+          type: string
+          enum: [file, directory]
+          description: Type of entry
+          example: file
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - version
+        - user-agent
+      properties:
+        status:
+          type: string
+          description: Health status of the service
+          enum: [ok]
+          example: ok
+        version:
+          type: string
+          description: Version of the proxy service
+          example: 1.0.0
+        user-agent:
+          type: string
+          description: User-Agent string used by the proxy for outgoing requests
+          example: "rb-slingshot/1.0.0 (https://requestbite.com/slingshot)"
+
+  securitySchemes: {}
+
+security: []

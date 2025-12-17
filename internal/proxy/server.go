@@ -515,8 +515,8 @@ func (s *Server) handleFileRequest(w http.ResponseWriter, r *http.Request) {
 	fileInfo, err := os.Stat(cleanPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			w.WriteHeader(http.StatusNotFound)
 			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
 			s.writeErrorResponse(w, FileNotFoundError.Type, FileNotFoundError.Title, fmt.Sprintf("File not found: %s", cleanPath))
 			return
 		}

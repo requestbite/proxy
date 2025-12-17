@@ -7,7 +7,7 @@
 VERSION := $(shell if git describe --tags --exact-match 2>/dev/null >/dev/null; then git describe --tags --exact-match | sed 's/^v//'; else echo "dev"; fi)
 
 # Binary name
-BINARY_NAME := requestbite-proxy
+BINARY_NAME := rb-proxy
 
 # Build metadata
 BUILD_TIME := $(shell date -u '+%Y-%m-%d %H:%M:%S UTC')
@@ -37,7 +37,7 @@ COLOR_BOLD := \033[1m
 COLOR_GREEN := \033[32m
 COLOR_BLUE := \033[34m
 
-.PHONY: all build build-all release clean install help
+.PHONY: all build build-all release clean install dev help
 
 # Default target
 all: build
@@ -118,7 +118,9 @@ release: build-all
 clean:
 	@echo "$(COLOR_BOLD)$(COLOR_BLUE)Cleaning build artifacts...$(COLOR_RESET)"
 	@rm -rf $(DIST_DIR)
+	@rm -rf tmp/
 	@rm -f $(BINARY_NAME) $(BINARY_NAME).exe
+	@rm -f build-errors.log
 	@echo "$(COLOR_GREEN)✓ Clean complete$(COLOR_RESET)"
 
 # Install locally for testing (to ~/.local/bin)
@@ -136,6 +138,16 @@ install: build
 		echo "Add to PATH: export PATH=\"\$$HOME/.local/bin:\$$PATH\""; \
 	fi
 
+# Run with hot reload (requires air)
+dev:
+	@if command -v air > /dev/null; then \
+		air; \
+	else \
+		echo "Air is not installed. Install it with: go install github.com/air-verse/air@latest"; \
+		echo "Or run without hot reload using: make build && ./$(BINARY_NAME)"; \
+		exit 1; \
+	fi
+
 # Show version
 version:
 	@echo "$(BINARY_NAME) v$(VERSION)"
@@ -151,6 +163,7 @@ help:
 	@echo ""
 	@echo "$(COLOR_BOLD)Targets:$(COLOR_RESET)"
 	@echo "  build      - Build for current platform (default)"
+	@echo "  dev        - Run with hot reload using Air (for development)"
 	@echo "  build-all  - Build for all platforms (darwin/amd64, darwin/arm64, linux/amd64, windows/amd64)"
 	@echo "  release    - Build all platforms and create release archives with checksums"
 	@echo "  clean      - Remove all build artifacts"
@@ -160,6 +173,7 @@ help:
 	@echo ""
 	@echo "$(COLOR_BOLD)Examples:$(COLOR_RESET)"
 	@echo "  make build          # Quick build for development"
+	@echo "  make dev            # Run with hot reload"
 	@echo "  make build-all      # Build for all platforms"
 	@echo "  make release        # Create release archives"
 	@echo "  make install        # Install locally"

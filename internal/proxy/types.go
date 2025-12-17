@@ -37,13 +37,15 @@ type FileRequest struct {
 
 // DirectoryRequest represents a directory listing request
 type DirectoryRequest struct {
-	Path *string `json:"path"` // Pointer to allow null detection
+	Path            *string `json:"path"`            // Pointer to allow null detection
+	ShowHiddenFiles *bool   `json:"showHiddenFiles"` // Defaults to false if not provided
 }
 
 // DirectoryEntry represents a file or directory entry
 type DirectoryEntry struct {
-	Name string `json:"name"`
-	Type string `json:"type"` // "file" or "directory"
+	Name      string `json:"name"`
+	Type      string `json:"type"`                // "file" or "directory"
+	IsSymlink *bool  `json:"isSymlink,omitempty"` // Only present if entry is a symlink
 }
 
 // ProxyResponse represents the response structure matching the Lua API

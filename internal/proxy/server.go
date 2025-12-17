@@ -625,6 +625,12 @@ func (s *Server) handleDirectoryRequest(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Determine whether to show hidden files (defaults to false)
+	showHidden := false
+	if req.ShowHiddenFiles != nil {
+		showHidden = *req.ShowHiddenFiles
+	}
+
 	// Determine target path
 	var targetPath string
 	if req.Path == nil {
@@ -650,8 +656,8 @@ func (s *Server) handleDirectoryRequest(w http.ResponseWriter, r *http.Request) 
 	fileInfo, err := os.Stat(cleanPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			w.WriteHeader(http.StatusNotFound)
 			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
 			s.writeErrorResponse(w, FileNotFoundError.Type, FileNotFoundError.Title, fmt.Sprintf("Directory not found: %s", cleanPath))
 			return
 		}
@@ -678,15 +684,59 @@ func (s *Server) handleDirectoryRequest(w http.ResponseWriter, r *http.Request) 
 	// Build response array
 	var dirEntries []DirectoryEntry
 	for _, entry := range entries {
-		entryType := "file"
-		if entry.IsDir() {
-			entryType = "directory"
+		entryName := entry.Name()
+
+		// Filter hidden files if showHidden is false
+		if !showHidden && strings.HasPrefix(entryName, ".") {
+			continue
 		}
 
-		dirEntries = append(dirEntries, DirectoryEntry{
-			Name: entry.Name(),
-			Type: entryType,
-		})
+		// Build full path for this entry
+		entryPath := filepath.Join(cleanPath, entryName)
+
+		// Use Lstat to detect symlinks (doesn't follow them)
+		lstatInfo, err := os.Lstat(entryPath)
+		if err != nil {
+			// Log but skip entries we can't access
+			s.logger.Printf("Warning: Cannot lstat entry %s: %v", entryPath, err)
+			continue
+		}
+
+		var dirEntry DirectoryEntry
+		dirEntry.Name = entryName
+
+		// Check if it's a symlink
+		if lstatInfo.Mode()&os.ModeSymlink != 0 {
+			// It's a symlink - follow it to determine target type
+			statInfo, err := os.Stat(entryPath)
+			if err != nil {
+				// Broken symlink or permission denied
+				// Default to "file" type and mark as symlink
+				s.logger.Printf("Warning: Cannot follow symlink %s: %v", entryPath, err)
+				dirEntry.Type = "file"
+				isSymlink := true
+				dirEntry.IsSymlink = &isSymlink
+			} else {
+				// Successfully followed symlink
+				if statInfo.IsDir() {
+					dirEntry.Type = "directory"
+				} else {
+					dirEntry.Type = "file"
+				}
+				isSymlink := true
+				dirEntry.IsSymlink = &isSymlink
+			}
+		} else {
+			// Not a symlink - use standard type detection
+			if lstatInfo.IsDir() {
+				dirEntry.Type = "directory"
+			} else {
+				dirEntry.Type = "file"
+			}
+			// Don't set IsSymlink field for non-symlinks (omitempty will exclude it)
+		}
+
+		dirEntries = append(dirEntries, dirEntry)
 	}
 
 	// Sort entries (directories first, then alphabetically)

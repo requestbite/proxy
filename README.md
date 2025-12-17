@@ -3,12 +3,12 @@
 ## About
 
 Since it's almost impossible for webapps (such as
-[Slingshot](https://s.requestbite.com)) to successfully make HTTP requests to
+[Slingshot](https://s.requestbite.com)) to directly make HTTP requests to
 arbitrary HTTP resources because of CORS restrictions, a proxy is needed. This
 repo holds the proxy used by Slingshot. It's written in Go and hosted at
 [p.requestbite.com](https://p.requestbite.com/health) which is the one used by
-default by Slingshot, but nothing prevents you from running it yourself (and
-configuring Slingshot to use it).
+default by Slingshot. However, nothing prevents you from running it yourself
+(and configuring Slingshot to use it).
 
 Running it yourself means you don't have to proxy any requests via our servers
 (unless you want to) and it means you can access resources normally not

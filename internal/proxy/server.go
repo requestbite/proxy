@@ -118,6 +118,39 @@ func (s *Server) isBlockedHostname(hostname string) bool {
 	return false
 }
 
+// isProxyUserAgent checks if the incoming request has the proxy's User-Agent
+// This prevents infinite loops where the proxy calls itself
+func (s *Server) isProxyUserAgent(r *http.Request) bool {
+	userAgent := r.Header.Get("User-Agent")
+	if userAgent == "" {
+		return false
+	}
+
+	// Case-insensitive check for "rb-slingshot" substring
+	// This catches: "rb-slingshot/0.1.0 (https://requestbite.com/slingshot)"
+	return strings.Contains(strings.ToLower(userAgent), "rb-slingshot")
+}
+
+// detectLoop checks for potential infinite loops using multiple strategies:
+// 1. User-Agent detection (prevents any proxy instance from calling another)
+// 2. Hostname blocking (prevents targeting known production domains)
+func (s *Server) detectLoop(r *http.Request, targetURL string) bool {
+	// Strategy 1: Check incoming User-Agent header
+	if s.isProxyUserAgent(r) {
+		s.logger.Printf("BLOCKED loop: rb-slingshot User-Agent detected from %s targeting %s",
+			r.RemoteAddr, targetURL)
+		return true
+	}
+
+	// Strategy 2: Check target URL hostname
+	if s.isLoopbackRequest(targetURL) {
+		s.logger.Printf("BLOCKED loop: hostname blocking prevented request to: %s", targetURL)
+		return true
+	}
+
+	return false
+}
+
 // handleJSONRequest handles /proxy/request endpoint
 func (s *Server) handleJSONRequest(w http.ResponseWriter, r *http.Request) {
 	// Handle OPTIONS for CORS preflight
@@ -163,8 +196,7 @@ func (s *Server) handleJSONRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check for self-loop AFTER path parameter substitution
-	if s.isLoopbackRequest(req.URL) {
-		s.logger.Printf("BLOCKED loop request to: %s", req.URL)
+	if s.detectLoop(r, req.URL) {
 		s.writeLoopErrorResponse(w, "Request could create an infinite loop to this proxy server")
 		return
 	}
@@ -265,8 +297,7 @@ func (s *Server) handleFormRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check for self-loop before processing
-	if s.isLoopbackRequest(formReq.URL) {
-		s.logger.Printf("BLOCKED loop request to: %s", formReq.URL)
+	if s.detectLoop(r, formReq.URL) {
 		s.writeLoopErrorResponse(w, "Request could create an infinite loop to this proxy server")
 		return
 	}

@@ -369,6 +369,37 @@ requestbite-proxy
 requestbite-proxy -port 3000 -enable-local-files
 ```
 
+## Loop Detection
+
+The proxy implements multiple strategies to prevent infinite request loops:
+
+### User-Agent Detection
+Incoming requests with User-Agent header containing "rb-slingshot" are blocked. This prevents:
+- Proxy calling itself
+- Chained proxy instances
+- Accidental infinite loops in self-hosted deployments
+
+### Hostname Blocking
+Requests targeting specific hostnames are blocked:
+- `p.requestbite.com` (production)
+- `dev.p.requestbite.com` (development)
+
+Exception: Requests to `/health` endpoint are always allowed for health checks.
+
+When a loop is detected, the proxy returns HTTP 508 Loop Detected with `error_type: "loop_detected"`.
+
+**Testing Loop Protection:**
+```bash
+# This should return 508 Loop Detected
+curl -X POST http://localhost:8080/proxy/request \
+  -H "Content-Type: application/json" \
+  -d '{
+    "method": "POST",
+    "url": "http://localhost:8080/proxy/request",
+    "body": "{\"method\":\"GET\",\"url\":\"https://example.com\"}"
+  }'
+```
+
 ## Error Types
 
 The proxy returns standardized error responses:
@@ -378,7 +409,9 @@ The proxy returns standardized error responses:
 - `connection_error`: Network connection failed
 - `redirect_not_followed`: Redirect encountered but `followRedirects: false`
 - `request_format_error`: Invalid JSON or missing required fields
-- `loop_detected`: If proxy is called to call itself
+- `loop_detected`: Request would create an infinite loop. Detected by:
+  - User-Agent header matching `rb-slingshot` (any version, any instance)
+  - Target hostname in blocked list (p.requestbite.com, dev.p.requestbite.com)
 - `file_not_found`: Requested file does not exist (404)
 - `file_access_error`: Cannot access file (permissions, is directory, etc.)
 - `feature_disabled`: Attempted to use disabled feature

@@ -145,7 +145,12 @@ install: build
 # Run with hot reload (requires air)
 # Usage: make dev ARGS="--enable-local-files --port 9090"
 dev:
-	@if command -v air > /dev/null; then \
+	@# For --help or --version, run directly without Air
+	@if echo "$(ARGS)" | grep -qE "(-h|--help|-v|--version)"; then \
+		echo "$(COLOR_BLUE)Running without hot reload (--help or --version detected)$(COLOR_RESET)"; \
+		$(MAKE) build > /dev/null 2>&1; \
+		./$(BUILD_DIR)/$(BINARY_NAME) $(ARGS); \
+	elif command -v air > /dev/null; then \
 		air -- $(ARGS); \
 	else \
 		echo "Air is not installed. Install it with: go install github.com/air-verse/air@latest"; \

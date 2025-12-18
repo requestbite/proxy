@@ -33,7 +33,7 @@ type Server struct {
 }
 
 // NewServer creates a new proxy server instance
-func NewServer(port int, version string, enableLocalFiles bool) (*Server, error) {
+func NewServer(port int, version string, enableLocalFiles bool, blacklistFile string) (*Server, error) {
 	logger := log.New(log.Writer(), "[PROXY] ", log.LstdFlags)
 
 	// CONFIGURABLE: List of hostnames to block to prevent loops
@@ -41,6 +41,16 @@ func NewServer(port int, version string, enableLocalFiles bool) (*Server, error)
 	blockedHostnames := []string{
 		"p.requestbite.com",
 		"dev.p.requestbite.com",
+	}
+
+	// Load additional hostnames from blacklist file if provided
+	if blacklistFile != "" {
+		additionalHosts, err := loadBlacklistFile(blacklistFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load blacklist file: %v", err)
+		}
+		blockedHostnames = append(blockedHostnames, additionalHosts...)
+		logger.Printf("Loaded %d hostname(s) from blacklist file: %s", len(additionalHosts), blacklistFile)
 	}
 
 	return &Server{
@@ -51,6 +61,48 @@ func NewServer(port int, version string, enableLocalFiles bool) (*Server, error)
 		version:          version,
 		enableLocalFiles: enableLocalFiles,
 	}, nil
+}
+
+// loadBlacklistFile reads a blacklist file and returns a list of hostnames
+// Format: one hostname per line, optionally with description after colon
+// Example:
+//   p.requestbite.com: Production proxy
+//   127.0.0.1: Localhost
+//   # This is a comment
+func loadBlacklistFile(filename string) ([]string, error) {
+	// Read file
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	var hostnames []string
+	lines := strings.Split(string(data), "\n")
+
+	for _, line := range lines {
+		// Trim whitespace
+		line = strings.TrimSpace(line)
+
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// Extract hostname (everything before colon, or entire line if no colon)
+		hostname := line
+		if idx := strings.Index(line, ":"); idx != -1 {
+			hostname = strings.TrimSpace(line[:idx])
+		}
+
+		// Skip if hostname is empty after extraction
+		if hostname == "" {
+			continue
+		}
+
+		hostnames = append(hostnames, hostname)
+	}
+
+	return hostnames, nil
 }
 
 // Start starts the HTTP server

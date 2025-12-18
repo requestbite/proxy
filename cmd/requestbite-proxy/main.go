@@ -24,6 +24,7 @@ func main() {
 	var (
 		port             = flag.Int("port", DefaultPort, "Port to listen on")
 		enableLocalFiles = flag.Bool("enable-local-files", false, "Enable local file and directory serving")
+		blacklistFile    = flag.String("enable-blacklist", "", "Enable hostname blacklist from file (one hostname per line)")
 		showVersion      = flag.Bool("version", false, "Show version information")
 		showHelp         = flag.Bool("help", false, "Show help information")
 	)
@@ -52,7 +53,7 @@ func main() {
 	}
 
 	// Start the proxy server
-	server, err := proxy.NewServer(*port, Version, *enableLocalFiles)
+	server, err := proxy.NewServer(*port, Version, *enableLocalFiles, *blacklistFile)
 	if err != nil {
 		log.Fatalf("Failed to create proxy server: %v", err)
 	}
@@ -60,6 +61,9 @@ func main() {
 	fmt.Printf("RequestBite Slingshot Proxy listening on port %d\n", *port)
 	if *enableLocalFiles {
 		fmt.Println("\033[33mWarning:\033[0m Local file and dir serving enabled via /file and /dir endpoints")
+	}
+	if *blacklistFile != "" {
+		fmt.Printf("\033[33mInfo:\033[0m Hostname blacklist enabled from file: %s\n", *blacklistFile)
 	}
 	fmt.Println("Press Ctrl+C to stop")
 

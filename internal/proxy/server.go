@@ -226,24 +226,24 @@ func (s *Server) handleJSONRequest(w http.ResponseWriter, r *http.Request) {
 	// Parse request body
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		s.writeErrorResponse(w, "request_format_error", "Failed to read request body", err.Error())
+		s.writeErrorResponse(w, http.StatusBadRequest, "request_format_error", "Failed to read request body", err.Error())
 		return
 	}
 
 	var req ProxyRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		s.writeErrorResponse(w, "request_format_error", "Invalid JSON", fmt.Sprintf("Failed to parse JSON request: %v", err))
+		s.writeErrorResponse(w, http.StatusBadRequest, "request_format_error", "Invalid JSON", fmt.Sprintf("Failed to parse JSON request: %v", err))
 		return
 	}
 
 	// Validate required fields
 	if req.Method == "" {
-		s.writeErrorResponse(w, "request_format_error", "Missing Method", "HTTP method is required")
+		s.writeErrorResponse(w, http.StatusBadRequest, "request_format_error", "Missing Method", "HTTP method is required")
 		return
 	}
 
 	if req.URL == "" {
-		s.writeErrorResponse(w, "request_format_error", "Missing URL", "URL is required")
+		s.writeErrorResponse(w, http.StatusBadRequest, "request_format_error", "Missing URL", "URL is required")
 		return
 	}
 
@@ -278,10 +278,10 @@ func (s *Server) handleJSONRequest(w http.ResponseWriter, r *http.Request) {
 			s.logger.Printf("Streaming request failed: %v", err)
 			// Check for specific error types
 			if strings.Contains(err.Error(), "streaming timeout") {
-				s.writeErrorResponse(w, StreamingTimeoutError.Type, StreamingTimeoutError.Title, err.Error())
+				s.writeErrorResponse(w, http.StatusInternalServerError, StreamingTimeoutError.Type, StreamingTimeoutError.Title, err.Error())
 			} else {
 				// If streaming fails, try to write an error response if headers haven't been sent
-				s.writeErrorResponse(w, "unknown_error", "Streaming Request Failed", err.Error())
+				s.writeErrorResponse(w, http.StatusInternalServerError, "unknown_error", "Streaming Request Failed", err.Error())
 			}
 		}
 		return
@@ -291,7 +291,7 @@ func (s *Server) handleJSONRequest(w http.ResponseWriter, r *http.Request) {
 	response, err := s.httpClient.ExecuteRequest(ctx, &req)
 	if err != nil {
 		s.logger.Printf("Request failed: %v", err)
-		s.writeErrorResponse(w, "unknown_error", "Request Failed", err.Error())
+		s.writeErrorResponse(w, http.StatusInternalServerError, "unknown_error", "Request Failed", err.Error())
 		return
 	}
 
@@ -354,7 +354,7 @@ func (s *Server) handleFormRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Validate required fields
 	if formReq.URL == "" {
-		s.writeErrorResponse(w, "request_format_error", "Missing URL", "URL is required")
+		s.writeErrorResponse(w, http.StatusBadRequest, "request_format_error", "Missing URL", "URL is required")
 		return
 	}
 
@@ -383,7 +383,7 @@ func (s *Server) handleFormRequest(w http.ResponseWriter, r *http.Request) {
 		var err error
 		rawBody, err = io.ReadAll(r.Body)
 		if err != nil {
-			s.writeErrorResponse(w, "request_format_error", "Failed to read request body", fmt.Sprintf("Error reading body: %v", err))
+			s.writeErrorResponse(w, http.StatusBadRequest, "request_format_error", "Failed to read request body", fmt.Sprintf("Error reading body: %v", err))
 			return
 		}
 		formReq.RawBody = rawBody
@@ -391,7 +391,7 @@ func (s *Server) handleFormRequest(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// For URL-encoded forms, parse normally
 		if err := r.ParseForm(); err != nil {
-			s.writeErrorResponse(w, "request_format_error", "Invalid form data", fmt.Sprintf("Failed to parse form data: %v", err))
+			s.writeErrorResponse(w, http.StatusBadRequest, "request_format_error", "Invalid form data", fmt.Sprintf("Failed to parse form data: %v", err))
 			return
 		}
 
@@ -416,7 +416,7 @@ func (s *Server) handleFormRequest(w http.ResponseWriter, r *http.Request) {
 	response, err := s.httpClient.ExecuteFormRequest(ctx, formReq, formData)
 	if err != nil {
 		s.logger.Printf("Form request failed: %v", err)
-		s.writeErrorResponse(w, "unknown_error", "Request Failed", err.Error())
+		s.writeErrorResponse(w, http.StatusInternalServerError, "unknown_error", "Request Failed", err.Error())
 		return
 	}
 
@@ -581,8 +581,8 @@ func (w *responseWriter) Flush() {
 	}
 }
 
-// writeErrorResponse writes a standardized error response
-func (s *Server) writeErrorResponse(w http.ResponseWriter, errorType, errorTitle, errorMessage string) {
+// writeErrorResponse writes a standardized error response with custom status code
+func (s *Server) writeErrorResponse(w http.ResponseWriter, statusCode int, errorType, errorTitle, errorMessage string) {
 	response := &ProxyResponse{
 		Success:      false,
 		ErrorType:    errorType,
@@ -591,7 +591,7 @@ func (s *Server) writeErrorResponse(w http.ResponseWriter, errorType, errorTitle
 		Cancelled:    false,
 	}
 
-	w.WriteHeader(http.StatusOK) // Keep 200 status for API consistency
+	w.WriteHeader(statusCode)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		s.logger.Printf("Failed to encode error response: %v", err)
 	}
@@ -625,7 +625,7 @@ func (s *Server) handleFileRequest(w http.ResponseWriter, r *http.Request) {
 	if !s.enableLocalFiles {
 		w.Header().Set("Content-Type", "application/json")
 		s.logger.Printf("File endpoint accessed but feature is disabled")
-		s.writeErrorResponse(w, FeatureDisabledError.Type, FeatureDisabledError.Title,
+		s.writeErrorResponse(w, http.StatusForbidden, FeatureDisabledError.Type, FeatureDisabledError.Title,
 			"Local file serving is disabled. Enable with --enable-local-files flag.")
 		return
 	}
@@ -634,21 +634,21 @@ func (s *Server) handleFileRequest(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
-		s.writeErrorResponse(w, "request_format_error", "Failed to read request body", err.Error())
+		s.writeErrorResponse(w, http.StatusBadRequest, "request_format_error", "Failed to read request body", err.Error())
 		return
 	}
 
 	var req FileRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		w.Header().Set("Content-Type", "application/json")
-		s.writeErrorResponse(w, "request_format_error", "Invalid JSON", fmt.Sprintf("Failed to parse JSON request: %v", err))
+		s.writeErrorResponse(w, http.StatusBadRequest, "request_format_error", "Invalid JSON", fmt.Sprintf("Failed to parse JSON request: %v", err))
 		return
 	}
 
 	// Validate required fields
 	if req.Path == "" {
 		w.Header().Set("Content-Type", "application/json")
-		s.writeErrorResponse(w, "request_format_error", "Missing path", "File path is required")
+		s.writeErrorResponse(w, http.StatusBadRequest, "request_format_error", "Missing path", "File path is required")
 		return
 	}
 
@@ -658,7 +658,7 @@ func (s *Server) handleFileRequest(w http.ResponseWriter, r *http.Request) {
 	// Security check: Ensure path is absolute
 	if !filepath.IsAbs(cleanPath) {
 		w.Header().Set("Content-Type", "application/json")
-		s.writeErrorResponse(w, FileAccessError.Type, FileAccessError.Title, "Path must be absolute")
+		s.writeErrorResponse(w, http.StatusBadRequest, FileAccessError.Type, FileAccessError.Title, "Path must be absolute")
 		return
 	}
 
@@ -669,19 +669,18 @@ func (s *Server) handleFileRequest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			s.writeErrorResponse(w, FileNotFoundError.Type, FileNotFoundError.Title, fmt.Sprintf("File not found: %s", cleanPath))
+			s.writeErrorResponse(w, http.StatusNotFound, FileNotFoundError.Type, FileNotFoundError.Title, fmt.Sprintf("File not found: %s", cleanPath))
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		s.writeErrorResponse(w, FileAccessError.Type, FileAccessError.Title, fmt.Sprintf("Cannot access file: %v", err))
+		s.writeErrorResponse(w, http.StatusInternalServerError, FileAccessError.Type, FileAccessError.Title, fmt.Sprintf("Cannot access file: %v", err))
 		return
 	}
 
 	// Check if it's a directory
 	if fileInfo.IsDir() {
 		w.Header().Set("Content-Type", "application/json")
-		s.writeErrorResponse(w, FileAccessError.Type, FileAccessError.Title, "Path is a directory, not a file")
+		s.writeErrorResponse(w, http.StatusBadRequest, FileAccessError.Type, FileAccessError.Title, "Path is a directory, not a file")
 		return
 	}
 
@@ -689,7 +688,7 @@ func (s *Server) handleFileRequest(w http.ResponseWriter, r *http.Request) {
 	fileData, err := os.ReadFile(cleanPath)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
-		s.writeErrorResponse(w, FileAccessError.Type, FileAccessError.Title, fmt.Sprintf("Failed to read file: %v", err))
+		s.writeErrorResponse(w, http.StatusInternalServerError, FileAccessError.Type, FileAccessError.Title, fmt.Sprintf("Failed to read file: %v", err))
 		return
 	}
 
@@ -785,7 +784,7 @@ func (s *Server) handleDirectoryRequest(w http.ResponseWriter, r *http.Request) 
 	if !s.enableLocalFiles {
 		w.Header().Set("Content-Type", "application/json")
 		s.logger.Printf("Directory endpoint accessed but feature is disabled")
-		s.writeErrorResponse(w, FeatureDisabledError.Type, FeatureDisabledError.Title,
+		s.writeErrorResponse(w, http.StatusForbidden, FeatureDisabledError.Type, FeatureDisabledError.Title,
 			"Local file serving is disabled. Enable with --enable-local-files flag.")
 		return
 	}
@@ -794,14 +793,14 @@ func (s *Server) handleDirectoryRequest(w http.ResponseWriter, r *http.Request) 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
-		s.writeErrorResponse(w, "request_format_error", "Failed to read request body", err.Error())
+		s.writeErrorResponse(w, http.StatusBadRequest, "request_format_error", "Failed to read request body", err.Error())
 		return
 	}
 
 	var req DirectoryRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		w.Header().Set("Content-Type", "application/json")
-		s.writeErrorResponse(w, "request_format_error", "Invalid JSON", fmt.Sprintf("Failed to parse JSON request: %v", err))
+		s.writeErrorResponse(w, http.StatusBadRequest, "request_format_error", "Invalid JSON", fmt.Sprintf("Failed to parse JSON request: %v", err))
 		return
 	}
 
@@ -826,7 +825,7 @@ func (s *Server) handleDirectoryRequest(w http.ResponseWriter, r *http.Request) 
 	// Security check: Ensure path is absolute (unless it's the root)
 	if !filepath.IsAbs(cleanPath) {
 		w.Header().Set("Content-Type", "application/json")
-		s.writeErrorResponse(w, FileAccessError.Type, FileAccessError.Title, "Path must be absolute")
+		s.writeErrorResponse(w, http.StatusBadRequest, FileAccessError.Type, FileAccessError.Title, "Path must be absolute")
 		return
 	}
 
@@ -837,19 +836,18 @@ func (s *Server) handleDirectoryRequest(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		if os.IsNotExist(err) {
 			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			s.writeErrorResponse(w, FileNotFoundError.Type, FileNotFoundError.Title, fmt.Sprintf("Directory not found: %s", cleanPath))
+			s.writeErrorResponse(w, http.StatusNotFound, FileNotFoundError.Type, FileNotFoundError.Title, fmt.Sprintf("Directory not found: %s", cleanPath))
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		s.writeErrorResponse(w, FileAccessError.Type, FileAccessError.Title, fmt.Sprintf("Cannot access path: %v", err))
+		s.writeErrorResponse(w, http.StatusInternalServerError, FileAccessError.Type, FileAccessError.Title, fmt.Sprintf("Cannot access path: %v", err))
 		return
 	}
 
 	// Check if it's a directory
 	if !fileInfo.IsDir() {
 		w.Header().Set("Content-Type", "application/json")
-		s.writeErrorResponse(w, FileAccessError.Type, FileAccessError.Title, "Path is a file, not a directory")
+		s.writeErrorResponse(w, http.StatusBadRequest, FileAccessError.Type, FileAccessError.Title, "Path is a file, not a directory")
 		return
 	}
 
@@ -857,7 +855,7 @@ func (s *Server) handleDirectoryRequest(w http.ResponseWriter, r *http.Request) 
 	entries, err := os.ReadDir(cleanPath)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
-		s.writeErrorResponse(w, FileAccessError.Type, FileAccessError.Title, fmt.Sprintf("Failed to read directory: %v", err))
+		s.writeErrorResponse(w, http.StatusInternalServerError, FileAccessError.Type, FileAccessError.Title, fmt.Sprintf("Failed to read directory: %v", err))
 		return
 	}
 

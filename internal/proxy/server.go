@@ -496,6 +496,11 @@ func (s *Server) handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 		"user-agent": fmt.Sprintf("rb-slingshot/%s (https://requestbite.com/slingshot)", s.version),
 	}
 
+	// Add enableLocalFiles field if feature is enabled
+	if s.enableLocalFiles {
+		healthResponse["enableLocalFiles"] = true
+	}
+
 	json.NewEncoder(w).Encode(healthResponse)
 }
 

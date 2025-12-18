@@ -130,6 +130,9 @@ func (s *Server) Start() error {
 	// Custom 404 handler
 	router.NotFoundHandler = http.HandlerFunc(s.handleNotFound)
 
+	// Custom 405 Method Not Allowed handler (returns 400 per user request)
+	router.MethodNotAllowedHandler = http.HandlerFunc(s.handleMethodNotAllowed)
+
 	s.server = &http.Server{
 		Addr:    fmt.Sprintf(":%d", s.port),
 		Handler: router,
@@ -514,6 +517,24 @@ func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleMethodNotAllowed handles requests with incorrect HTTP methods
+func (s *Server) handleMethodNotAllowed(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	response := &ProxyResponse{
+		Success:      false,
+		ErrorType:    "method_not_allowed",
+		ErrorTitle:   "Method Not Allowed",
+		ErrorMessage: fmt.Sprintf("Method %s is not allowed for endpoint %s", r.Method, r.URL.Path),
+		Cancelled:    false,
+	}
+
+	w.WriteHeader(http.StatusBadRequest) // HTTP 400 status
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		s.logger.Printf("Failed to encode method not allowed response: %v", err)
+	}
+}
+
 // corsMiddleware adds CORS headers
 func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -602,8 +623,10 @@ func (s *Server) handleFileRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Check if feature is enabled
 	if !s.enableLocalFiles {
-		w.WriteHeader(http.StatusNotFound)
+		w.Header().Set("Content-Type", "application/json")
 		s.logger.Printf("File endpoint accessed but feature is disabled")
+		s.writeErrorResponse(w, FeatureDisabledError.Type, FeatureDisabledError.Title,
+			"Local file serving is disabled. Enable with --enable-local-files flag.")
 		return
 	}
 
@@ -760,8 +783,10 @@ func (s *Server) handleDirectoryRequest(w http.ResponseWriter, r *http.Request) 
 
 	// Check if feature is enabled
 	if !s.enableLocalFiles {
-		w.WriteHeader(http.StatusNotFound)
+		w.Header().Set("Content-Type", "application/json")
 		s.logger.Printf("Directory endpoint accessed but feature is disabled")
+		s.writeErrorResponse(w, FeatureDisabledError.Type, FeatureDisabledError.Title,
+			"Local file serving is disabled. Enable with --enable-local-files flag.")
 		return
 	}
 

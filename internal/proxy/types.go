@@ -135,6 +135,10 @@ var (
 		Type:  "feature_disabled",
 		Title: "Feature Disabled",
 	}
+	EndpointNotFoundError = &ProxyError{
+		Type:  "endpoint_not_found",
+		Title: "Endpoint Not Found",
+	}
 )
 
 // RequestMetrics holds timing and size information

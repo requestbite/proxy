@@ -71,6 +71,9 @@ func (s *Server) Start() error {
 	// Health check endpoint
 	router.HandleFunc("/health", s.handleHealthCheck).Methods("GET", "OPTIONS")
 
+	// Custom 404 handler
+	router.NotFoundHandler = http.HandlerFunc(s.handleNotFound)
+
 	s.server = &http.Server{
 		Addr:    fmt.Sprintf(":%d", s.port),
 		Handler: router,
@@ -382,6 +385,24 @@ func (s *Server) handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(healthResponse)
+}
+
+// handleNotFound handles requests to undefined endpoints
+func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	response := &ProxyResponse{
+		Success:      false,
+		ErrorType:    EndpointNotFoundError.Type,
+		ErrorTitle:   EndpointNotFoundError.Title,
+		ErrorMessage: fmt.Sprintf("Endpoint not found: %s", r.URL.Path),
+		Cancelled:    false,
+	}
+
+	w.WriteHeader(http.StatusNotFound) // HTTP 404 status
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		s.logger.Printf("Failed to encode not found response: %v", err)
+	}
 }
 
 // corsMiddleware adds CORS headers

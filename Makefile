@@ -143,12 +143,13 @@ install: build
 	fi
 
 # Run with hot reload (requires air)
+# Usage: make dev ARGS="--enable-local-files --port 9090"
 dev:
 	@if command -v air > /dev/null; then \
-		air; \
+		air -- $(ARGS); \
 	else \
 		echo "Air is not installed. Install it with: go install github.com/air-verse/air@latest"; \
-		echo "Or run without hot reload using: make build && ./$(BINARY_NAME)"; \
+		echo "Or run without hot reload using: make build && ./build/$(BINARY_NAME) $(ARGS)"; \
 		exit 1; \
 	fi
 
@@ -176,10 +177,12 @@ help:
 	@echo "  help       - Show this help message"
 	@echo ""
 	@echo "$(COLOR_BOLD)Examples:$(COLOR_RESET)"
-	@echo "  make build          # Quick build for development"
-	@echo "  make dev            # Run with hot reload"
-	@echo "  make build-all      # Build for all platforms"
-	@echo "  make release        # Create release archives"
-	@echo "  make install        # Install locally"
+	@echo "  make build                                    # Quick build for development"
+	@echo "  make dev                                      # Run with hot reload"
+	@echo "  make dev ARGS=\"--enable-local-files\"          # Run with CLI arguments"
+	@echo "  make dev ARGS=\"--port 9090\"                   # Run on custom port"
+	@echo "  make build-all                                # Build for all platforms"
+	@echo "  make release                                  # Create release archives"
+	@echo "  make install                                  # Install locally"
 	@echo ""
 	@echo "$(COLOR_BOLD)Current version:$(COLOR_RESET) $(VERSION)"

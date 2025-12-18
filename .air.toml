@@ -3,7 +3,7 @@ testdata_dir = "testdata"
 tmp_dir = "tmp"
 
 [build]
-  args_bin = ["--enable-local-files", "--port", "9999"]
+  args_bin = ["--port", "9999"]
   bin = "./tmp/main"
   cmd = "go build -o ./tmp/main ./cmd/requestbite-proxy/main.go"
   delay = 1000

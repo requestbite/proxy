@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -652,12 +653,37 @@ func (s *Server) detectMimeType(filePath string, data []byte) string {
 	return mimeType
 }
 
-// getDefaultRoot returns the platform-specific root directory
+// getDefaultRoot returns the user's home directory, or falls back to platform root
 func (s *Server) getDefaultRoot() string {
+	// Try to get the current user's home directory
+	if currentUser, err := user.Current(); err == nil {
+		if currentUser.HomeDir != "" {
+			return currentUser.HomeDir
+		}
+	}
+
+	// Fall back to platform-specific root directory
 	if runtime.GOOS == "windows" {
 		return "C:\\"
 	}
 	return "/"
+}
+
+// getParentDirectory returns the parent directory path, or nil if at root
+func (s *Server) getParentDirectory(currentPath string) *string {
+	// Clean the path first
+	cleanPath := filepath.Clean(currentPath)
+
+	// Get the parent directory
+	parentPath := filepath.Dir(cleanPath)
+
+	// Check if we're at the root (parent == current means we can't go up)
+	// This handles Unix root "/" and Windows drive roots like "C:\"
+	if parentPath == cleanPath {
+		return nil
+	}
+
+	return &parentPath
 }
 
 // sortDirectoryEntries sorts directory entries (directories first, then alphabetically)
@@ -819,9 +845,18 @@ func (s *Server) handleDirectoryRequest(w http.ResponseWriter, r *http.Request) 
 	// Sort entries (directories first, then alphabetically)
 	sortDirectoryEntries(dirEntries)
 
-	// Return JSON array
+	// Get parent directory
+	parentDir := s.getParentDirectory(cleanPath)
+
+	// Build response object
+	response := DirectoryResponse{
+		ParentDir: parentDir,
+		Dir:       dirEntries,
+	}
+
+	// Return JSON response
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(dirEntries); err != nil {
+	if err := json.NewEncoder(w).Encode(response); err != nil {
 		s.logger.Printf("Failed to encode directory response: %v", err)
 	}
 

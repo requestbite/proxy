@@ -48,6 +48,12 @@ type DirectoryEntry struct {
 	IsSymlink *bool  `json:"isSymlink,omitempty"` // Only present if entry is a symlink
 }
 
+// DirectoryResponse represents the response for directory listing
+type DirectoryResponse struct {
+	ParentDir *string          `json:"parentDir"` // Absolute path to parent directory, or null if at root
+	Dir       []DirectoryEntry `json:"dir"`       // Array of directory entries
+}
+
 // ProxyResponse represents the response structure matching the Lua API
 type ProxyResponse struct {
 	Success         bool              `json:"success"`

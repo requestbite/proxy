@@ -17,7 +17,7 @@ info:
     url: https://opensource.org/licenses/MIT
 
 servers:
-  - url: http://localhost:8080
+  - url: http://localhost:9999
     description: Local development server
   - url: https://p.requestbite.com
     description: Production proxy server
@@ -405,13 +405,13 @@ paths:
         - files
       summary: List directory contents
       description: |
-        Lists files and subdirectories in a specified directory. Returns a sorted array of entries
-        (directories first, then alphabetically).
+        Lists files and subdirectories in a specified directory. Returns an object with the parent
+        directory path and a sorted array of entries (directories first, then alphabetically).
 
         **Security**:
         - Requires `--enable-local-files` flag to be enabled
         - Only absolute paths are accepted
-        - Defaults to root directory (/ on Unix, C:\ on Windows) if no path provided
+        - Defaults to user's home directory if no path provided (falls back to / on Unix, C:\ on Windows)
       operationId: listDirectory
       requestBody:
         required: true
@@ -424,8 +424,8 @@ paths:
                 summary: List specific directory
                 value:
                   path: /home/user/documents
-              rootDirectory:
-                summary: List root directory (defaults to / or C:\)
+              homeDirectory:
+                summary: List home directory (default when path is null)
                 value:
                   path: null
               windowsDirectory:
@@ -438,18 +438,18 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/DirectoryEntry'
+                $ref: '#/components/schemas/DirectoryResponse'
               example:
-                - name: projects
-                  type: directory
-                - name: documents
-                  type: directory
-                - name: readme.txt
-                  type: file
-                - name: config.json
-                  type: file
+                parentDir: /home/user
+                dir:
+                  - name: projects
+                    type: directory
+                  - name: documents
+                    type: directory
+                  - name: readme.txt
+                    type: file
+                  - name: config.json
+                    type: file
         '404':
           description: Directory not found
           content:
@@ -657,8 +657,37 @@ components:
           nullable: true
           description: |
             Absolute path to the directory to list. If null or omitted, defaults to the
-            platform-specific root directory (/ on Unix/Linux, C:\ on Windows).
+            user's home directory (falls back to / on Unix/Linux, C:\ on Windows if home unavailable).
           example: /home/user/documents
+        showHiddenFiles:
+          type: boolean
+          nullable: true
+          description: Whether to show hidden files (files starting with .). Defaults to false.
+          example: false
+
+    DirectoryResponse:
+      type: object
+      required:
+        - parentDir
+        - dir
+      properties:
+        parentDir:
+          type: string
+          nullable: true
+          description: |
+            Absolute path to the parent directory. Returns null if already at the root
+            (e.g., / on Unix or C:\ on Windows).
+          example: /home/user
+        dir:
+          type: array
+          items:
+            $ref: '#/components/schemas/DirectoryEntry'
+          description: Array of directory entries sorted with directories first, then alphabetically
+          example:
+            - name: projects
+              type: directory
+            - name: readme.txt
+              type: file
 
     DirectoryEntry:
       type: object

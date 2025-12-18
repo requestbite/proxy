@@ -73,6 +73,29 @@ make build
 go build -o requestbite-proxy .
 ```
 
+### Development Workflow
+
+For active development with hot reload (requires [Air](https://github.com/air-verse/air)):
+
+```bash
+# Install Air (one-time setup)
+go install github.com/air-verse/air@latest
+
+# Run with hot reload (no arguments)
+make dev
+
+# Run with CLI arguments
+make dev ARGS="--enable-local-files"
+
+# Run with multiple arguments
+make dev ARGS="--enable-local-files --port 9090"
+
+# Show help
+make dev ARGS="--help"
+```
+
+The `ARGS` variable allows you to pass any CLI arguments to the proxy when using `make dev`, making it easy to test different configurations during development.
+
 ## Quick Start
 
 ### Run

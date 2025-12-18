@@ -157,27 +157,6 @@ paths:
                 errorTitle: Loop Detected
                 errorMessage: Request could create an infinite loop to this proxy server
                 cancelled: false
-    options:
-      tags:
-        - proxy
-      summary: CORS preflight for /proxy/request
-      operationId: proxyRequestOptions
-      responses:
-        '200':
-          description: CORS preflight response
-          headers:
-            Access-Control-Allow-Origin:
-              schema:
-                type: string
-                example: "*"
-            Access-Control-Allow-Methods:
-              schema:
-                type: string
-                example: GET, POST, PUT, DELETE, OPTIONS
-            Access-Control-Allow-Headers:
-              schema:
-                type: string
-                example: Content-Type, Authorization, X-Requested-With
 
   /proxy/form:
     post:
@@ -298,14 +277,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProxyResponse'
-    options:
-      tags:
-        - proxy
-      summary: CORS preflight for /proxy/form
-      operationId: proxyFormOptions
-      responses:
-        '200':
-          description: CORS preflight response
 
   /file:
     post:
@@ -403,14 +374,6 @@ paths:
                     errorTitle: File Access Error
                     errorMessage: Path is a directory, not a file
                     cancelled: false
-    options:
-      tags:
-        - files
-      summary: CORS preflight for /file
-      operationId: fileOptions
-      responses:
-        '200':
-          description: CORS preflight response
 
   /dir:
     post:
@@ -487,14 +450,6 @@ paths:
                 errorTitle: File Access Error
                 errorMessage: Path is a file, not a directory
                 cancelled: false
-    options:
-      tags:
-        - files
-      summary: CORS preflight for /dir
-      operationId: dirOptions
-      responses:
-        '200':
-          description: CORS preflight response
 
   /health:
     get:
@@ -516,14 +471,6 @@ paths:
                 status: ok
                 version: 1.0.0
                 user-agent: "rb-slingshot/1.0.0 (https://requestbite.com/slingshot)"
-    options:
-      tags:
-        - health
-      summary: CORS preflight for /health
-      operationId: healthOptions
-      responses:
-        '200':
-          description: CORS preflight response
 
 components:
   schemas:

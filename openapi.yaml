@@ -31,6 +31,30 @@ tags:
     description: Service health and status checks
 
 paths:
+  /:
+    get:
+      tags:
+        - health
+      summary: Root endpoint with ASCII art welcome message
+      description: |
+        Returns a welcome message with ASCII art logo and information about the Slingshot Proxy.
+        The response includes colored ASCII art if the User-Agent contains "rb-slingshot", otherwise
+        returns a black and white version.
+      operationId: root
+      responses:
+        '200':
+          description: Welcome message with service information
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: |
+                Welcome to version 1.0.0 of:
+
+                Slingshot Proxy API
+
+                The Slingshot Proxy is a powerful HTTP proxy server...
+
   /proxy/request:
     post:
       tags:

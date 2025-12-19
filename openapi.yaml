@@ -441,6 +441,7 @@ paths:
                 $ref: '#/components/schemas/DirectoryResponse'
               example:
                 parentDir: /home/user
+                currentDir: /home/user/documents
                 dir:
                   - name: projects
                     type: directory
@@ -448,8 +449,12 @@ paths:
                     type: directory
                   - name: readme.txt
                     type: file
+                    sizeBytes: 2048
+                    sizeHuman: "2 kb"
                   - name: config.json
                     type: file
+                    sizeBytes: 1536000
+                    sizeHuman: "1 MB"
         '404':
           description: Directory not found
           content:
@@ -669,6 +674,7 @@ components:
       type: object
       required:
         - parentDir
+        - currentDir
         - dir
       properties:
         parentDir:
@@ -678,6 +684,10 @@ components:
             Absolute path to the parent directory. Returns null if already at the root
             (e.g., / on Unix or C:\ on Windows).
           example: /home/user
+        currentDir:
+          type: string
+          description: Absolute path to the currently listed directory
+          example: /home/user/documents
         dir:
           type: array
           items:
@@ -688,6 +698,8 @@ components:
               type: directory
             - name: readme.txt
               type: file
+              sizeBytes: 2048
+              sizeHuman: "2 kb"
 
     DirectoryEntry:
       type: object
@@ -704,6 +716,21 @@ components:
           enum: [file, directory]
           description: Type of entry
           example: file
+        isSymlink:
+          type: boolean
+          description: Indicates if this entry is a symbolic link (only present for symlinks)
+          example: true
+        sizeBytes:
+          type: integer
+          format: int64
+          description: File size in bytes (only present for files, not directories)
+          example: 2048
+        sizeHuman:
+          type: string
+          description: |
+            Human-readable file size formatted as kb, MB, or GB (rounded to nearest whole number).
+            Only present for files, not directories.
+          example: "2 kb"
 
     HealthResponse:
       type: object

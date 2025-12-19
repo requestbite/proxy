@@ -46,12 +46,15 @@ type DirectoryEntry struct {
 	Name      string `json:"name"`
 	Type      string `json:"type"`                // "file" or "directory"
 	IsSymlink *bool  `json:"isSymlink,omitempty"` // Only present if entry is a symlink
+	SizeBytes *int64 `json:"sizeBytes,omitempty"` // File size in bytes (only for files)
+	SizeHuman *string `json:"sizeHuman,omitempty"` // Human-readable size (only for files)
 }
 
 // DirectoryResponse represents the response for directory listing
 type DirectoryResponse struct {
-	ParentDir *string          `json:"parentDir"` // Absolute path to parent directory, or null if at root
-	Dir       []DirectoryEntry `json:"dir"`       // Array of directory entries
+	ParentDir  *string          `json:"parentDir"`  // Absolute path to parent directory, or null if at root
+	CurrentDir string           `json:"currentDir"` // Absolute path to the currently listed directory
+	Dir        []DirectoryEntry `json:"dir"`        // Array of directory entries
 }
 
 // ProxyResponse represents the response structure matching the Lua API
@@ -173,4 +176,25 @@ func (m *RequestMetrics) FormatSize() string {
 		return fmt.Sprintf("%.2f KB", float64(size)/1024)
 	}
 	return fmt.Sprintf("%d B", size)
+}
+
+// FormatFileSize returns a human-readable file size string
+// Formats as kb, MB, or GB (rounded to nearest whole number)
+func FormatFileSize(bytes int64) string {
+	const (
+		kb = 1024
+		mb = 1024 * 1024
+		gb = 1024 * 1024 * 1024
+	)
+
+	switch {
+	case bytes >= gb:
+		return fmt.Sprintf("%d GB", (bytes+gb/2)/gb) // Round to nearest GB
+	case bytes >= mb:
+		return fmt.Sprintf("%d MB", (bytes+mb/2)/mb) // Round to nearest MB
+	case bytes >= kb:
+		return fmt.Sprintf("%d kb", (bytes+kb/2)/kb) // Round to nearest kb
+	default:
+		return fmt.Sprintf("%d kb", 0) // Less than 1kb rounds to 0 kb
+	}
 }

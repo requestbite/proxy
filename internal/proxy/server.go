@@ -905,6 +905,11 @@ func (s *Server) handleDirectoryRequest(w http.ResponseWriter, r *http.Request) 
 					dirEntry.Type = "directory"
 				} else {
 					dirEntry.Type = "file"
+					// Add size information for file symlinks
+					fileSize := statInfo.Size()
+					dirEntry.SizeBytes = &fileSize
+					humanSize := FormatFileSize(fileSize)
+					dirEntry.SizeHuman = &humanSize
 				}
 				isSymlink := true
 				dirEntry.IsSymlink = &isSymlink
@@ -915,6 +920,11 @@ func (s *Server) handleDirectoryRequest(w http.ResponseWriter, r *http.Request) 
 				dirEntry.Type = "directory"
 			} else {
 				dirEntry.Type = "file"
+				// Add size information for files
+				fileSize := lstatInfo.Size()
+				dirEntry.SizeBytes = &fileSize
+				humanSize := FormatFileSize(fileSize)
+				dirEntry.SizeHuman = &humanSize
 			}
 			// Don't set IsSymlink field for non-symlinks (omitempty will exclude it)
 		}
@@ -930,8 +940,9 @@ func (s *Server) handleDirectoryRequest(w http.ResponseWriter, r *http.Request) 
 
 	// Build response object
 	response := DirectoryResponse{
-		ParentDir: parentDir,
-		Dir:       dirEntries,
+		ParentDir:  parentDir,
+		CurrentDir: cleanPath,
+		Dir:        dirEntries,
 	}
 
 	// Return JSON response

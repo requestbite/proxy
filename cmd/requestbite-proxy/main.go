@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	DefaultPort = 8080
+	DefaultPort = 7331
 )
 
 var (

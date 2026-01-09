@@ -2,9 +2,14 @@
 # Cross-platform build automation for macOS, Linux, and Windows
 
 # Extract version from git tag (strip 'v' prefix), fallback to "dev"
-# If on a tag like v1.2.3, VERSION = 1.2.3
-# If not on a tag, VERSION = dev
-VERSION := $(shell if git describe --tags --exact-match 2>/dev/null >/dev/null; then git describe --tags --exact-match | sed 's/^v//'; else echo "dev"; fi)
+# If on exact tag like v1.2.3, VERSION = 1.2.3
+# If ahead of tag, VERSION = 1.2.3-abc1234 (tag-commit)
+# If no tags, VERSION = dev
+VERSION := $(shell if git describe --tags --exact-match 2>/dev/null >/dev/null; then \
+	git describe --tags --exact-match | sed 's/^v//'; \
+else \
+	git describe --tags 2>/dev/null | sed 's/^v//' | sed 's/-[0-9]\+-g/-/' || echo "dev"; \
+fi)
 
 # Binary name
 BINARY_NAME := rb-proxy

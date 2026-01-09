@@ -32,7 +32,7 @@ func main() {
 
 	// Show version
 	if *showVersion {
-		fmt.Printf("RequestBite Slingshot Proxy (Go) v%s\n", Version)
+		fmt.Printf("RequestBite Slingshot Proxy v%s\n", Version)
 		if BuildTime != "unknown" {
 			fmt.Printf("Built: %s\n", BuildTime)
 		}
@@ -44,7 +44,7 @@ func main() {
 
 	// Show help
 	if *showHelp {
-		fmt.Printf("RequestBite Slingshot Proxy (Go) v%s\n\n", Version)
+		fmt.Printf("RequestBite Slingshot Proxy v%s\n\n", Version)
 		fmt.Println("Usage:")
 		fmt.Printf("  %s [options]\n\n", os.Args[0])
 		fmt.Println("Options:")
@@ -58,7 +58,7 @@ func main() {
 		log.Fatalf("Failed to create proxy server: %v", err)
 	}
 
-	fmt.Printf("RequestBite Slingshot Proxy listening on port %d\n", *port)
+	fmt.Printf("RequestBite Slingshot Proxy v%s listening on port %d\n", Version, *port)
 	if *enableLocalFiles {
 		fmt.Println("\033[33mWarning:\033[0m Local file and dir serving enabled via /file and /dir endpoints")
 	}

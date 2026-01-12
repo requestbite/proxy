@@ -1,17 +1,25 @@
-# RequestBite Slingshot Proxy
+# RequestBite Proxy
+
+> [!WARNING]
+> This repo is very much work in progress and information in it should not be
+> considered up-to-date. We're working hard on fixing this.
 
 ## About
 
-Since it's almost impossible for webapps (such as
-[Slingshot](https://s.requestbite.com)) to directly make HTTP requests to
-arbitrary HTTP resources because of CORS restrictions, a proxy is needed. This
-repo holds the proxy used by Slingshot. It's written in Go and hosted at
-[p.requestbite.com](https://p.requestbite.com/health) which is the one used by
-default by Slingshot. However, nothing prevents you from running it yourself
-(and configuring Slingshot to use it).
+The RequestBite Proxy is a highly performant REST API written in Go that can
+proxy HTTP requests for webapps and be used to read files and browse directories
+on the machine on which it is installed.
 
-Running it yourself means you don't have to proxy any requests via our servers
-(unless you want to) and it means you can access resources normally not
+It is used as a proxy server by [Slingshot](https://s.requestbite.com) as it's
+almost impossible for webapps to directly make HTTP requests to arbitrary HTTP
+resources because of CORS restrictions. If installed locally (with necessary
+config options enabled), Slingshot will also do local file browsing in certain
+situations (e.g. when importing or updating files).
+
+The RequestBite Proxy is hosted at
+[p.requestbite.com](https://p.requestbite.com/health) but nothing prevents you
+from running it yourself. Doing so means you won't proxy any requests via our
+servers (unless you want to) and it means you can access resources normally not
 reachable over the public Internet, such as those on your machine, on your local
 network, or on any VPN you might be connected to.
 
@@ -55,6 +63,28 @@ mv requestbite-proxy/requestbite-proxy ~/.local/bin/
 
 # Make sure ~/.local/bin is in your PATH
 export PATH="$HOME/.local/bin:$PATH"
+```
+
+### Run proxy in Docker
+
+To build a Docker image of the RequestBite Proxy, run:
+
+```bash
+docker build -t rb-proxy .
+```
+
+This creates an image called `rb-proxy:latest`. By default this does not support
+exposing local files and directories via the `/file` endpoint. To run the
+RequestBite Proxy in Docker, run:
+
+```bash
+docker run -d -p 7331:7331 rb-proxy:latest
+```
+
+Now you can check the health of the proxy by running:
+
+```bash
+curl http://localhost:7331/health
 ```
 
 ### Build from Source
@@ -196,9 +226,11 @@ Serves local files from the filesystem. **This endpoint is disabled by default**
 ```
 
 **Request Fields:**
+
 - `path`: Absolute path to the file (required). Works with both Unix-style (`/home/user/file.txt`) and Windows-style (`C:\Users\user\file.txt`) paths.
 
 **Response:**
+
 - **Success (200)**: Returns the raw file content with appropriate `Content-Type` header based on file extension and content detection
 - **Not Found (404)**: File doesn't exist or feature is disabled
 - **Error**: JSON error response for invalid paths, directories, or access errors
@@ -216,6 +248,7 @@ curl -X POST http://localhost:8080/file \
 ```
 
 **Supported Scenarios:**
+
 - Text files (`.txt`, `.json`, `.xml`, etc.) - served with appropriate text MIME types
 - Images (`.png`, `.jpg`, `.gif`, etc.) - served with image MIME types
 - Documents (`.pdf`, `.docx`, etc.) - served with document MIME types
@@ -224,11 +257,13 @@ curl -X POST http://localhost:8080/file \
 **Error Responses:**
 
 When feature is disabled (404):
+
 ```
 (Empty response body with 404 status)
 ```
 
 File not found:
+
 ```json
 {
   "success": false,
@@ -253,6 +288,7 @@ Lists files and directories in a specified path. **This endpoint is disabled by 
 ```
 
 For root directory, use `null`:
+
 ```json
 {
   "path": null
@@ -287,6 +323,7 @@ Returns a JSON array of directory entries sorted with directories first, then fi
 **Platform Defaults:**
 
 When `path` is `null`, the endpoint returns the root directory for the platform:
+
 - **Unix/Linux/macOS**: `/`
 - **Windows**: `C:\`
 
@@ -312,11 +349,13 @@ curl -X POST http://localhost:8080/dir \
 The `/dir` endpoint uses the same error response format as the `/file` endpoint:
 
 When feature is disabled (404):
+
 ```
 (Empty response body with 404 status)
 ```
 
 Directory not found:
+
 ```json
 {
   "success": false,
@@ -327,6 +366,7 @@ Directory not found:
 ```
 
 Path is not a directory:
+
 ```json
 {
   "success": false,
@@ -384,6 +424,7 @@ Command-line flags:
 - `-version`: Show version information
 
 **Example:**
+
 ```bash
 # Run with default settings
 requestbite-proxy
@@ -397,13 +438,17 @@ requestbite-proxy -port 3000 -enable-local-files
 The proxy implements multiple strategies to prevent infinite request loops:
 
 ### User-Agent Detection
+
 Incoming requests with User-Agent header containing "rb-slingshot" are blocked. This prevents:
+
 - Proxy calling itself
 - Chained proxy instances
 - Accidental infinite loops in self-hosted deployments
 
 ### Hostname Blocking
+
 Requests targeting specific hostnames are blocked:
+
 - `p.requestbite.com` (production)
 - `dev.p.requestbite.com` (development)
 
@@ -412,6 +457,7 @@ Exception: Requests to `/health` endpoint are always allowed for health checks.
 When a loop is detected, the proxy returns HTTP 508 Loop Detected with `error_type: "loop_detected"`.
 
 **Testing Loop Protection:**
+
 ```bash
 # This should return 508 Loop Detected
 curl -X POST http://localhost:8080/proxy/request \

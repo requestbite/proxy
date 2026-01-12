@@ -1,0 +1,34 @@
+# Build artifacts
+build/
+dist/
+*.log
+
+# Development files
+.git/
+.gitignore
+.air.toml
+tmp/
+
+# Test files
+tests.sh
+test-*.sh
+
+# Documentation (except README/LICENSE which we copy)
+*.md
+!README.md
+docs/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak

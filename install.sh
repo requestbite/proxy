@@ -186,7 +186,7 @@ get_latest_version() {
   local version
   version=$(curl -fsSL "https://api.github.com/repos/$GITHUB_REPO/releases/latest" |
     grep '"tag_name"' |
-    sed -E 's/.*"v([^"]+)".*/\1/' || echo "")
+    sed -E 's/.*"tag_name": *"v?([^"]+)".*/\1/' || echo "")
 
   if [ -z "$version" ]; then
     die "Failed to fetch latest version from GitHub API"

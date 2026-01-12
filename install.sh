@@ -181,7 +181,7 @@ detect_arch() {
 
 # Get latest version from GitHub
 get_latest_version() {
-  info "Fetching latest version from GitHub..."
+  info "Fetching latest version from GitHub..." >&2
 
   local version
   version=$(curl -fsSL "https://api.github.com/repos/$GITHUB_REPO/releases/latest" |
@@ -281,8 +281,9 @@ extract_binary() {
     if [ ! -f "$BINARY_NAME/$BINARY_NAME" ]; then
       die "Binary not found in archive"
     fi
-    mv "$BINARY_NAME/$BINARY_NAME" "$BINARY_NAME"
+    mv "$BINARY_NAME/$BINARY_NAME" "${BINARY_NAME}.tmp"
     rm -rf "$BINARY_NAME"
+    mv "${BINARY_NAME}.tmp" "$BINARY_NAME"
   else
     die "Unsupported archive format: $archive_name"
   fi
@@ -407,7 +408,7 @@ main() {
 
   # Construct download URL
   local archive_name="${BINARY_NAME}-${VERSION}-${os}-${arch}.tar.gz"
-  local base_url="https://github.com/${GITHUB_REPO}/releases/download/v${VERSION}"
+  local base_url="https://github.com/${GITHUB_REPO}/releases/download/${VERSION}"
   local download_url="${base_url}/${archive_name}"
   local checksum_url="${base_url}/SHA256SUMS"
 

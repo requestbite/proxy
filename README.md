@@ -1,9 +1,5 @@
 # RequestBite Proxy
 
-> [!WARNING]
-> This repo is very much work in progress and information in it should not be
-> considered up-to-date. We're working hard on fixing this.
-
 ## About
 
 The RequestBite Proxy is a highly performant REST API written in Go that can
@@ -27,39 +23,51 @@ network, or on any VPN you might be connected to.
 
 ### Quick Install (Recommended)
 
-Install the latest version on macOS or Linux with a single command:
+Install the latest release on MacOS or Linux like so:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/requestbite/proxy-go/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/requestbite/proxy/main/install.sh | bash
 ```
 
 The binary will be installed to `~/.local/bin` by default.
 
 ### Custom Installation Directory
 
+To install the latest release to a custom directory, do like so:
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/requestbite/proxy-go/main/install.sh | bash -s -- --prefix=$HOME/bin
+curl -fsSL https://raw.githubusercontent.com/requestbite/proxy/main/install.sh | bash -s -- --prefix=$HOME/bin
+```
+
+### Install Older Version
+
+To install a specific version (in this example, version 0.3.1), do like so:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/requestbite/proxy/main/install.sh | bash -s -- --version=0.3.1
 ```
 
 ### Manual Download
 
-Download pre-built binaries from [GitHub Releases](https://github.com/requestbite/proxy-go/releases).
+Download pre-built binaries from [GitHub
+Releases](https://github.com/requestbite/proxy/releases).
 
 **Supported Platforms:**
 
-| OS | Architecture | Binary Name |
-|----|--------------|-------------|
-| macOS | Intel (x86-64) | `requestbite-proxy-*-darwin-amd64.tar.gz` |
-| macOS | Apple Silicon (ARM64) | `requestbite-proxy-*-darwin-arm64.tar.gz` |
-| Linux | x86-64 | `requestbite-proxy-*-linux-amd64.tar.gz` |
-| Windows | x86-64 | `requestbite-proxy-*-windows-amd64.zip` |
+| OS      | Architecture          | Binary Name                      |
+|---------|-----------------------|----------------------------------|
+| macOS   | Intel (x86-64)        | `rb-proxy-*-darwin-amd64.tar.gz` |
+| macOS   | Apple Silicon (ARM64) | `rb-proxy-*-darwin-arm64.tar.gz` |
+| Linux   | x86-64                | `rb-proxy-*-linux-amd64.tar.gz`  |
+| Windows | x86-64                | `rb-proxy-*-windows-amd64.zip`   |
 
-After downloading, extract the archive and move the binary to a directory in your PATH:
+After downloading, extract the archive and move the binary to a directory in
+your PATH:
 
 ```bash
 # macOS/Linux
-tar -xzf requestbite-proxy-*.tar.gz
-mv requestbite-proxy/requestbite-proxy ~/.local/bin/
+tar -xzf rb-proxy-*.tar.gz
+mv rb-proxy/rb-proxy ~/.local/bin/
 
 # Make sure ~/.local/bin is in your PATH
 export PATH="$HOME/.local/bin:$PATH"
@@ -93,14 +101,11 @@ Requires Go 1.19 or later:
 
 ```bash
 # Clone the repository
-git clone https://github.com/requestbite/proxy-go.git
-cd proxy-go
+git clone https://github.com/requestbite/proxy.git rb-proxy
+cd rb-proxy
 
 # Build using Makefile
 make build
-
-# Or build manually
-go build -o requestbite-proxy .
 ```
 
 ### Development Workflow
@@ -124,34 +129,36 @@ make dev ARGS="--enable-local-files --port 9090"
 make dev ARGS="--help"
 ```
 
-The `ARGS` variable allows you to pass any CLI arguments to the proxy when using `make dev`, making it easy to test different configurations during development.
+The `ARGS` variable allows you to pass any CLI arguments to the proxy when using
+`make dev`, making it easy to test different configurations during development.
 
 ## Quick Start
 
-### Run
+### Run Binary (Built) Version
 
 ```bash
-# Start on default port 8080
-requestbite-proxy
+# Start on default port 7331
+rb-proxy
 
 # Start on custom port
-requestbite-proxy -port 8081
+rb-proxy --port 8081
 
 # Show version
-requestbite-proxy -version
+rb-proxy --version
 
 # Show help
-requestbite-proxy -help
-```
-
-For local development, you can still use the simple build commands:
-
-```bash
-go build -o proxy .
-./proxy
+rb-proxy --help
 ```
 
 ## API Endpoints
+
+The full API is documented in OpenAPI 3.1 format in
+[openapi.yaml](./openapi.yaml) and can be imported into Slingshot by [clicking
+this
+link](https://s.requestbite.com/?import=https://raw.githubusercontent.com/requestbite/proxy/refs/heads/main/openapi.yaml)
+(note however, that Slingshot itself uses the proxy - so it's essentially using
+the proxy to call the proxy which is mostly prohibited - so it's easiest to
+interact with the proxy from e.g. `cURL`).
 
 ### POST /proxy/request
 
@@ -213,9 +220,12 @@ Standard form data in request body.
 
 ### POST /file
 
-Serves local files from the filesystem. **This endpoint is disabled by default** and must be explicitly enabled with the `--enable-local-files` flag for security reasons.
+Serves local files from the filesystem. **This endpoint is disabled by default**
+and must be explicitly enabled with the `--enable-local-files` flag for security
+reasons.
 
-**⚠️ Security Warning:** Only enable this feature in trusted environments. This allows the proxy to read any file accessible to the process user.
+**⚠️ Security Warning:** Only enable this feature in trusted environments. This
+allows the proxy to read any file accessible to the process user.
 
 **Request Body:**
 
@@ -227,19 +237,22 @@ Serves local files from the filesystem. **This endpoint is disabled by default**
 
 **Request Fields:**
 
-- `path`: Absolute path to the file (required). Works with both Unix-style (`/home/user/file.txt`) and Windows-style (`C:\Users\user\file.txt`) paths.
+- `path`: Absolute path to the file (required). Works with both Unix-style
+(`/home/user/file.txt`) and Windows-style (`C:\Users\user\file.txt`) paths.
 
 **Response:**
 
-- **Success (200)**: Returns the raw file content with appropriate `Content-Type` header based on file extension and content detection
+- **Success (200)**: Returns the raw file content with appropriate
+  `Content-Type` header based on file extension and content detection
 - **Not Found (404)**: File doesn't exist or feature is disabled
-- **Error**: JSON error response for invalid paths, directories, or access errors
+- **Error**: JSON error response for invalid paths, directories, or access
+  errors
 
 **Example:**
 
 ```bash
 # Enable local file serving
-requestbite-proxy --enable-local-files
+rb-proxy --enable-local-files
 
 # Request a file
 curl -X POST http://localhost:8080/file \
@@ -258,7 +271,7 @@ curl -X POST http://localhost:8080/file \
 
 When feature is disabled (404):
 
-```
+```plaintext
 (Empty response body with 404 status)
 ```
 
@@ -275,9 +288,11 @@ File not found:
 
 ### POST /dir
 
-Lists files and directories in a specified path. **This endpoint is disabled by default** and must be explicitly enabled with the `--enable-local-files` flag.
+Lists files and directories in a specified path. **This endpoint is disabled by
+default** and must be explicitly enabled with the `--enable-local-files` flag.
 
-**⚠️ Security Warning:** Only enable this feature in trusted environments. This allows the proxy to list directory contents accessible to the process user.
+**⚠️ Security Warning:** Only enable this feature in trusted environments. This
+allows the proxy to list directory contents accessible to the process user.
 
 **Request Body:**
 
@@ -297,7 +312,8 @@ For root directory, use `null`:
 
 **Response:**
 
-Returns a JSON array of directory entries sorted with directories first, then files, alphabetically within each group:
+Returns a JSON array of directory entries sorted with directories first, then
+files, alphabetically within each group:
 
 ```json
 [
@@ -350,7 +366,7 @@ The `/dir` endpoint uses the same error response format as the `/file` endpoint:
 
 When feature is disabled (404):
 
-```
+```plaintext
 (Empty response body with 404 status)
 ```
 
@@ -396,7 +412,7 @@ Run the proxy as a service and configure nginx to proxy to it:
 
 ```nginx
 upstream proxy_backend {
-    server localhost:8080;
+    server localhost:7331;
 }
 
 location /proxy/ {
@@ -411,17 +427,18 @@ location /proxy/ {
 CLI version of proxy.
 
 ```bash
-./proxy-go -port 8080
+./proxy-go --port 8080
 ```
 
 ## Configuration
 
 Command-line flags:
 
-- `-port`: Server port (default: 8080)
-- `-enable-local-files`: Enable local file serving via `/file` endpoint (default: false, **disabled for security**)
-- `-help`: Show help information
-- `-version`: Show version information
+- `--port`: Server port (default: 8080)
+- `--enable-local-files`: Enable local file serving via `/file` endpoint
+  (default: false, **disabled for security**)
+- `--help`: Show help information
+- `--version`: Show version information
 
 **Example:**
 
@@ -439,7 +456,8 @@ The proxy implements multiple strategies to prevent infinite request loops:
 
 ### User-Agent Detection
 
-Incoming requests with User-Agent header containing "rb-slingshot" are blocked. This prevents:
+Incoming requests with User-Agent header containing `rb-slingshot` are blocked.
+This prevents:
 
 - Proxy calling itself
 - Chained proxy instances
@@ -449,12 +467,14 @@ Incoming requests with User-Agent header containing "rb-slingshot" are blocked. 
 
 Requests targeting specific hostnames are blocked:
 
-- `p.requestbite.com` (production)
-- `dev.p.requestbite.com` (development)
+- `p.requestbite.com`
+- `localhost`
+- etc
 
 Exception: Requests to `/health` endpoint are always allowed for health checks.
 
-When a loop is detected, the proxy returns HTTP 508 Loop Detected with `error_type: "loop_detected"`.
+When a loop is detected, the proxy returns HTTP 508 Loop Detected with
+`error_type: "loop_detected"`.
 
 **Testing Loop Protection:**
 
@@ -505,4 +525,4 @@ Returns:
 
 ## License
 
-Same as the parent RequestBite project.
+See details about the license in [LICENSE](./LICENSE).

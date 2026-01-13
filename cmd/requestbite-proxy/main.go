@@ -1,12 +1,12 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"os"
 
 	"github.com/requestbite/proxy-go/internal/proxy"
+	flag "github.com/spf13/pflag"
 )
 
 const (
@@ -22,11 +22,11 @@ var (
 func main() {
 	// Command line flags
 	var (
-		port             = flag.Int("port", DefaultPort, "Port to listen on")
+		port             = flag.IntP("port", "p", DefaultPort, "Port to listen on")
 		enableLocalFiles = flag.Bool("enable-local-files", false, "Enable local file and directory serving")
 		blacklistFile    = flag.String("enable-blacklist", "", "Enable hostname blacklist from file (one hostname per line)")
-		showVersion      = flag.Bool("version", false, "Show version information")
-		showHelp         = flag.Bool("help", false, "Show help information")
+		showVersion      = flag.BoolP("version", "v", false, "Show version information")
+		showHelp         = flag.BoolP("help", "h", false, "Show help information")
 	)
 	flag.Parse()
 

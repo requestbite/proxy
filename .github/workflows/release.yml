@@ -56,8 +56,8 @@ jobs:
 
           **Quick Install (macOS/Linux):**
           ```bash
-          curl -fsSL https://raw.githubusercontent.com/requestbite/requestbite-proxy/main/install.sh | bash
           ```
+          curl -fsSL https://raw.githubusercontent.com/requestbite/proxy/main/install.sh | bash
 
           **Manual Installation:**
           Download the appropriate binary for your platform below, extract it, and add to your PATH.
@@ -71,10 +71,6 @@ jobs:
           - macOS (Intel & Apple Silicon)
           - Linux x86_64
           - Windows x86_64
-
-          ---
-
-          For full changelog, see [CHANGELOG.md](https://github.com/requestbite/requestbite-proxy/blob/main/CHANGELOG.md)
           EOF
 
           echo "Release notes generated"

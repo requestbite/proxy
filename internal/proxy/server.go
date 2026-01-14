@@ -481,11 +481,11 @@ func (s *Server) generateWelcomeMessage(useColors bool) string {
 ======================================================`
 	}
 
-	desc := "The Slingshot Proxy is a powerful HTTP proxy server that enables you to\n" +
+	desc := "The RequestBite Slingshot Proxy is an HTTP proxy server that enables you to\n" +
 		"make HTTP requests through a proxy, bypassing CORS restrictions and providing\n" +
 		"advanced features like streaming, form data handling, and local file serving.\n\n" +
 		"Learn more about the project at:\n" +
-		" - https://github.com/requestbite/slingshot-proxy\n\n" +
+		" - https://github.com/requestbite/proxy\n\n" +
 		"Endpoints:\n" +
 		" - POST /proxy/request - Make HTTP requests via JSON\n" +
 		" - POST /proxy/form    - Make HTTP requests via form data\n" +

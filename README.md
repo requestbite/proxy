@@ -1,10 +1,10 @@
-# RequestBite Proxy
+# RequestBite Slingshot Proxy
 
 ## About
 
-The RequestBite Proxy is a highly performant REST API written in Go that can
-proxy HTTP requests for webapps and be used to read files and browse directories
-on the machine on which it is installed.
+The RequestBite Slingshot Proxy is a highly performant REST API written in Go
+that can proxy HTTP requests for webapps and be used to read files and browse
+directories on the machine on which it is installed.
 
 It is used as a proxy server by [Slingshot](https://s.requestbite.com) as it's
 almost impossible for webapps to directly make HTTP requests to arbitrary HTTP
@@ -12,7 +12,7 @@ resources because of CORS restrictions. If installed locally (with necessary
 config options enabled), Slingshot will also do local file browsing in certain
 situations (e.g. when importing or updating files).
 
-The RequestBite Proxy is hosted at
+The RequestBite Slingshot Proxy is hosted at
 [p.requestbite.com](https://p.requestbite.com/health) but nothing prevents you
 from running it yourself. Doing so means you won't proxy any requests via our
 servers (unless you want to) and it means you can access resources normally not
@@ -75,7 +75,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ### Run proxy in Docker
 
-To build a Docker image of the RequestBite Proxy, run:
+To build a Docker image of the RequestBite Slingshot Proxy, run:
 
 ```bash
 docker build -t rb-proxy .
@@ -83,7 +83,7 @@ docker build -t rb-proxy .
 
 This creates an image called `rb-proxy:latest`. By default this does not support
 exposing local files and directories via the `/file` endpoint. To run the
-RequestBite Proxy in Docker, run:
+RequestBite Slingshot Proxy in Docker, run:
 
 ```bash
 docker run -d -p 7331:7331 rb-proxy:latest
@@ -347,7 +347,7 @@ When `path` is `null`, the endpoint returns the root directory for the platform:
 
 ```bash
 # Enable local file serving
-requestbite-proxy --enable-local-files
+rb-proxy --enable-local-files
 
 # List directory contents
 curl -X POST http://localhost:8080/dir \
@@ -444,10 +444,10 @@ Command-line flags:
 
 ```bash
 # Run with default settings
-requestbite-proxy
+rb-proxy
 
 # Run on custom port with local file serving enabled
-requestbite-proxy -port 3000 -enable-local-files
+rb-proxy -port 3000 -enable-local-files
 ```
 
 ## Loop Detection

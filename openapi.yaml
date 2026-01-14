@@ -6,42 +6,37 @@ info:
     RequestBite Slingshot is a HTTP proxy service that forwards requests to external APIs and services.
     It supports various request types including JSON, form data, and multipart form data, with features like
     streaming responses, custom headers, and loop prevention.
-
-    The proxy includes security features to prevent infinite loops by detecting rb-slingshot User-Agent
-    headers and blocking requests to configured proxy hostnames.
   contact:
     name: RequestBite
     url: https://requestbite.com/slingshot
   license:
-    name: MIT
-    url: https://opensource.org/licenses/MIT
+    name: AGPL 3.0
+    url: https://github.com/requestbite/proxy/blob/main/LICENSE
 
 servers:
   - url: http://localhost:9999
     description: Local development server
+  - url: http://localhost:7331
+    description: Locally built proxy server
   - url: https://p.requestbite.com
     description: Production proxy server
 
 tags:
-  - name: proxy
+  - name: Proxy
     description: HTTP proxy operations for forwarding requests
-  - name: files
+  - name: Files
     description: Local file system operations (requires --enable-local-files flag)
-  - name: exec
+  - name: Execute
     description: Process execution operations (requires --enable-exec flag, localhost only)
-  - name: health
+  - name: Health
     description: Service health and status checks
 
 paths:
   /:
     get:
-      tags:
-        - health
-      summary: Root endpoint with ASCII art welcome message
+      summary: API root
       description: |
-        Returns a welcome message with ASCII art logo and information about the Slingshot Proxy.
-        The response includes colored ASCII art if the User-Agent contains "rb-slingshot", otherwise
-        returns a black and white version.
+        Returns a welcome message with logo and information about the Slingshot Proxy.
       operationId: root
       responses:
         '200':
@@ -53,14 +48,14 @@ paths:
               example: |
                 Welcome to version 1.0.0 of:
 
-                Slingshot Proxy API
+                RequestBite Slingshot Proxy API
 
-                The Slingshot Proxy is a powerful HTTP proxy server...
+                The RequestBite Slingshot Proxy is an HTTP proxy server...
 
   /proxy/request:
     post:
       tags:
-        - proxy
+        - Proxy
       summary: Execute a JSON-based HTTP request
       description: |
         Forwards an HTTP request to a specified URL with full control over method, headers, body, and query parameters.
@@ -187,7 +182,7 @@ paths:
   /proxy/form:
     post:
       tags:
-        - proxy
+        - Proxy
       summary: Execute a form-based HTTP request
       description: |
         Forwards a form-based HTTP request (application/x-www-form-urlencoded or multipart/form-data).
@@ -307,7 +302,7 @@ paths:
   /file:
     post:
       tags:
-        - files
+        - Files
       summary: Serve a local file
       description: |
         Retrieves and serves a file from the local filesystem. Returns the raw file content with appropriate MIME type.
@@ -420,7 +415,7 @@ paths:
   /dir:
     post:
       tags:
-        - files
+        - Files
       summary: List directory contents
       description: |
         Lists files and subdirectories in a specified directory. Returns an object with the parent
@@ -517,7 +512,7 @@ paths:
   /exec:
     post:
       tags:
-        - exec
+        - Execute
       summary: Execute a process
       description: |
         Executes a command with optional arguments, environment variables, and working directory.
@@ -629,7 +624,7 @@ paths:
   /health:
     get:
       tags:
-        - health
+        - Health
       summary: Health check endpoint
       description: |
         Returns the health status and version information of the proxy service.

@@ -27,6 +27,8 @@ tags:
     description: HTTP proxy operations for forwarding requests
   - name: files
     description: Local file system operations (requires --enable-local-files flag)
+  - name: exec
+    description: Process execution operations (requires --enable-exec flag, localhost only)
   - name: health
     description: Service health and status checks
 
@@ -312,6 +314,7 @@ paths:
 
         **Security**:
         - Requires `--enable-local-files` flag to be enabled
+        - **Localhost only**: Only accessible from 127.0.0.1
         - Only absolute paths are accepted
         - Path traversal attempts are prevented via filepath.Clean()
 
@@ -398,6 +401,21 @@ paths:
                     errorTitle: File Access Error
                     errorMessage: Path is a directory, not a file
                     cancelled: false
+        '403':
+          description: Feature disabled or not from localhost
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyResponse'
+              examples:
+                notLocalhost:
+                  summary: Request not from localhost
+                  value:
+                    success: false
+                    errorType: localhost_only
+                    errorTitle: Localhost Only
+                    errorMessage: "This endpoint is only accessible from localhost (127.0.0.1)"
+                    cancelled: false
 
   /dir:
     post:
@@ -410,6 +428,7 @@ paths:
 
         **Security**:
         - Requires `--enable-local-files` flag to be enabled
+        - **Localhost only**: Only accessible from 127.0.0.1
         - Only absolute paths are accepted
         - Defaults to user's home directory if no path provided (falls back to / on Unix, C:\ on Windows)
       operationId: listDirectory
@@ -479,6 +498,133 @@ paths:
                 errorTitle: File Access Error
                 errorMessage: Path is a file, not a directory
                 cancelled: false
+        '403':
+          description: Feature disabled or not from localhost
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyResponse'
+              examples:
+                notLocalhost:
+                  summary: Request not from localhost
+                  value:
+                    success: false
+                    errorType: localhost_only
+                    errorTitle: Localhost Only
+                    errorMessage: "This endpoint is only accessible from localhost (127.0.0.1)"
+                    cancelled: false
+
+  /exec:
+    post:
+      tags:
+        - exec
+      summary: Execute a process
+      description: |
+        Executes a command with optional arguments, environment variables, and working directory.
+        Returns the exit code, stdout, stderr, and execution time.
+
+        **Security**:
+        - Requires `--enable-exec` flag to be enabled
+        - **Localhost only**: Only accessible from 127.0.0.1
+        - No command restrictions - user's responsibility to ensure safety
+        - Maximum timeout: 20 seconds, default: 10 seconds
+
+        **Note**: This is a synchronous operation. The request waits for the command to complete.
+      operationId: executeProcess
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecRequest'
+            examples:
+              simpleCommand:
+                summary: Simple command without arguments
+                value:
+                  command: "ls"
+                  timeout: 10
+              commandWithArgs:
+                summary: Command with arguments
+                value:
+                  command: "git"
+                  args: ["status", "--short"]
+                  workingDir: "/path/to/repo"
+                  timeout: 15
+              commandWithEnv:
+                summary: Command with environment variables
+                value:
+                  command: "node"
+                  args: ["script.js"]
+                  env:
+                    NODE_ENV: "production"
+                    API_KEY: "secret123"
+                  timeout: 20
+              combinedOutput:
+                summary: Command with combined stdout/stderr
+                value:
+                  command: "npm"
+                  args: ["install"]
+                  combineOutput: true
+                  timeout: 20
+      responses:
+        '200':
+          description: Command executed (check success and exitCode for actual result)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecResponse'
+              examples:
+                successfulExecution:
+                  summary: Successful command execution
+                  value:
+                    success: true
+                    exitCode: 0
+                    stdout: "file1.txt\nfile2.txt\n"
+                    stderr: ""
+                    executionTime: "45.23 ms"
+                failedExecution:
+                  summary: Command failed with non-zero exit code
+                  value:
+                    success: false
+                    exitCode: 1
+                    stdout: ""
+                    stderr: "Error: file not found\n"
+                    executionTime: "12.45 ms"
+                timeoutError:
+                  summary: Command timed out
+                  value:
+                    success: false
+                    errorType: "exec_timeout"
+                    errorTitle: "Execution Timeout"
+                    errorMessage: "Command timed out after 20 seconds"
+                    executionTime: "20000.00 ms"
+        '403':
+          description: Feature disabled or not localhost
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecResponse'
+              examples:
+                featureDisabled:
+                  summary: Feature not enabled
+                  value:
+                    success: false
+                    errorType: "feature_disabled"
+                    errorTitle: "Feature Disabled"
+                    errorMessage: "Process execution is disabled. Enable with --enable-exec flag."
+                notLocalhost:
+                  summary: Request not from localhost
+                  value:
+                    success: false
+                    errorType: "localhost_only"
+                    errorTitle: "Localhost Only"
+                    errorMessage: "This endpoint is only accessible from localhost (127.0.0.1)"
+        '400':
+          description: Invalid request (missing command, invalid JSON)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecResponse'
 
   /health:
     get:
@@ -630,6 +776,9 @@ components:
             - file_not_found
             - file_access_error
             - streaming_timeout
+            - exec_timeout
+            - exec_failed
+            - localhost_only
           example: connection_error
         errorTitle:
           type: string
@@ -731,6 +880,91 @@ components:
             Human-readable file size formatted as kb, MB, or GB (rounded to nearest whole number).
             Only present for files, not directories.
           example: "2 kb"
+
+    ExecRequest:
+      type: object
+      required:
+        - command
+      properties:
+        command:
+          type: string
+          description: Command to execute
+          example: "git"
+        args:
+          type: array
+          items:
+            type: string
+          description: Command arguments
+          example: ["status", "--short"]
+        timeout:
+          type: integer
+          default: 10
+          minimum: 1
+          maximum: 20
+          description: Execution timeout in seconds (max 20s)
+          example: 10
+        workingDir:
+          type: string
+          description: Working directory for command execution
+          example: "/path/to/project"
+        env:
+          type: object
+          additionalProperties:
+            type: string
+          description: Environment variables to set
+          example:
+            NODE_ENV: "production"
+            DEBUG: "true"
+        combineOutput:
+          type: boolean
+          default: false
+          description: Combine stdout and stderr into single output field
+          example: false
+
+    ExecResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Whether the command executed successfully (exit code 0)
+          example: true
+        exitCode:
+          type: integer
+          description: Command exit code (0 = success, non-zero = failure)
+          example: 0
+        stdout:
+          type: string
+          description: Standard output (only if combineOutput is false)
+          example: "file1.txt\nfile2.txt\n"
+        stderr:
+          type: string
+          description: Standard error output (only if combineOutput is false)
+          example: ""
+        combinedOutput:
+          type: string
+          description: Combined stdout and stderr (only if combineOutput is true)
+          example: "file1.txt\nfile2.txt\n"
+        executionTime:
+          type: string
+          description: Execution time in milliseconds
+          example: "45.23 ms"
+        errorType:
+          type: string
+          description: Error type (only present on failure)
+          enum:
+            - exec_timeout
+            - exec_failed
+            - feature_disabled
+            - localhost_only
+          example: "exec_timeout"
+        errorTitle:
+          type: string
+          description: Error title (only present on failure)
+          example: "Execution Timeout"
+        errorMessage:
+          type: string
+          description: Detailed error message (only present on failure)
+          example: "Command timed out after 20 seconds"
 
     HealthResponse:
       type: object

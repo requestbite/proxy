@@ -57,6 +57,31 @@ type DirectoryResponse struct {
 	Dir        []DirectoryEntry `json:"dir"`        // Array of directory entries
 }
 
+// ExecRequest represents a process execution request
+type ExecRequest struct {
+	Command       string            `json:"command"`              // Required
+	Args          []string          `json:"args,omitempty"`       // Optional
+	Timeout       int               `json:"timeout,omitempty"`    // Optional, default 10s, max 20s
+	WorkingDir    string            `json:"workingDir,omitempty"` // Optional
+	Env           map[string]string `json:"env,omitempty"`        // Optional
+	CombineOutput bool              `json:"combineOutput,omitempty"` // Optional, default false
+}
+
+// ExecResponse represents the response from process execution
+type ExecResponse struct {
+	Success        bool   `json:"success"`
+	ExitCode       int    `json:"exitCode,omitempty"`
+	Stdout         string `json:"stdout,omitempty"`        // Only if not combined
+	Stderr         string `json:"stderr,omitempty"`        // Only if not combined
+	CombinedOutput string `json:"combinedOutput,omitempty"` // Only if combined
+	ExecutionTime  string `json:"executionTime,omitempty"`
+
+	// Error fields (when success = false)
+	ErrorType    string `json:"errorType,omitempty"`
+	ErrorTitle   string `json:"errorTitle,omitempty"`
+	ErrorMessage string `json:"errorMessage,omitempty"`
+}
+
 // ProxyResponse represents the response structure matching the Lua API
 type ProxyResponse struct {
 	Success         bool              `json:"success"`
@@ -147,6 +172,18 @@ var (
 	EndpointNotFoundError = &ProxyError{
 		Type:  "endpoint_not_found",
 		Title: "Endpoint Not Found",
+	}
+	ExecTimeoutError = &ProxyError{
+		Type:  "exec_timeout",
+		Title: "Execution Timeout",
+	}
+	ExecFailedError = &ProxyError{
+		Type:  "exec_failed",
+		Title: "Execution Failed",
+	}
+	LocalhostOnlyError = &ProxyError{
+		Type:  "localhost_only",
+		Title: "Localhost Only",
 	}
 )
 

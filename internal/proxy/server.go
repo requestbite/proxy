@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"runtime"
@@ -30,10 +32,11 @@ type Server struct {
 	blockedHostnames []string // Configurable list of hostnames to block (prevents loops)
 	version          string   // Version for health endpoint
 	enableLocalFiles bool     // Enable local file serving via /file endpoint
+	enableExec       bool     // Enable process execution via /exec endpoint
 }
 
 // NewServer creates a new proxy server instance
-func NewServer(port int, version string, enableLocalFiles bool, blacklistFile string, enableLogging bool) (*Server, error) {
+func NewServer(port int, version string, enableLocalFiles bool, blacklistFile string, enableLogging bool, enableExec bool) (*Server, error) {
 	logger := log.New(log.Writer(), "[PROXY] ", log.LstdFlags)
 
 	// CONFIGURABLE: List of hostnames to block to prevent loops
@@ -60,6 +63,7 @@ func NewServer(port int, version string, enableLocalFiles bool, blacklistFile st
 		blockedHostnames: blockedHostnames,
 		version:          version,
 		enableLocalFiles: enableLocalFiles,
+		enableExec:       enableExec,
 	}, nil
 }
 
@@ -123,6 +127,7 @@ func (s *Server) Start() error {
 	router.HandleFunc("/proxy/form", s.handleFormRequest).Methods("POST", "OPTIONS")
 	router.HandleFunc("/file", s.handleFileRequest).Methods("POST", "OPTIONS")
 	router.HandleFunc("/dir", s.handleDirectoryRequest).Methods("POST", "OPTIONS")
+	router.HandleFunc("/exec", s.handleExecRequest).Methods("POST", "OPTIONS")
 
 	// Health check endpoint
 	router.HandleFunc("/health", s.handleHealthCheck).Methods("GET", "OPTIONS")
@@ -157,8 +162,8 @@ func (s *Server) isLoopbackRequest(targetURL string) bool {
 		return false // Invalid URL, let validation handle it
 	}
 
-	// Allow /health endpoint on any hostname (required for proxy health checks)
-	if parsedURL.Path == "/health" {
+	// Allow /health and / endpoints on any hostname (required for proxy health checks and welcome page)
+	if parsedURL.Path == "/health" || parsedURL.Path == "/" {
 		return false
 	}
 
@@ -178,6 +183,21 @@ func (s *Server) isBlockedHostname(hostname string) bool {
 		}
 	}
 	return false
+}
+
+// isLocalhostRequest checks if the request comes from localhost (127.0.0.1 or ::1)
+func (s *Server) isLocalhostRequest(r *http.Request) bool {
+	// Extract IP address from RemoteAddr (format: "IP:port")
+	remoteIP := r.RemoteAddr
+	if idx := strings.LastIndex(remoteIP, ":"); idx != -1 {
+		remoteIP = remoteIP[:idx]
+	}
+
+	// Remove brackets from IPv6 addresses
+	remoteIP = strings.Trim(remoteIP, "[]")
+
+	// Check for localhost IPs
+	return remoteIP == "127.0.0.1" || remoteIP == "::1" || remoteIP == "localhost"
 }
 
 // isProxyUserAgent checks if the incoming request has the proxy's User-Agent
@@ -472,8 +492,12 @@ func (s *Server) generateWelcomeMessage(useColors bool) string {
 		" - GET  /health        - Health check endpoint"
 
 	if s.enableLocalFiles {
-		desc += "\n - POST /file          - Serve local files (enabled)\n" +
-			" - POST /dir           - List directory contents (enabled)"
+		desc += "\n - POST /file          - Serve local files (localhost only)\n" +
+			" - POST /dir           - List directory contents (localhost only)"
+	}
+
+	if s.enableExec {
+		desc += "\n - POST /exec          - Execute processes (localhost only)"
 	}
 
 	return fmt.Sprintf("Welcome to version %s of:\n\n%s\n\n%s\n", s.version, asciiArt, desc)
@@ -499,6 +523,11 @@ func (s *Server) handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 	// Add enableLocalFiles field if feature is enabled
 	if s.enableLocalFiles {
 		healthResponse["enableLocalFiles"] = true
+	}
+
+	// Add enableExec field if feature is enabled
+	if s.enableExec {
+		healthResponse["enableExec"] = true
 	}
 
 	json.NewEncoder(w).Encode(healthResponse)
@@ -632,6 +661,15 @@ func (s *Server) handleFileRequest(w http.ResponseWriter, r *http.Request) {
 		s.logger.Printf("File endpoint accessed but feature is disabled")
 		s.writeErrorResponse(w, http.StatusForbidden, FeatureDisabledError.Type, FeatureDisabledError.Title,
 			"Local file serving is disabled. Enable with --enable-local-files flag.")
+		return
+	}
+
+	// Check if request is from localhost
+	if !s.isLocalhostRequest(r) {
+		w.Header().Set("Content-Type", "application/json")
+		s.logger.Printf("File endpoint accessed from non-localhost: %s", r.RemoteAddr)
+		s.writeErrorResponse(w, http.StatusForbidden, LocalhostOnlyError.Type, LocalhostOnlyError.Title,
+			"This endpoint is only accessible from localhost (127.0.0.1)")
 		return
 	}
 
@@ -794,6 +832,15 @@ func (s *Server) handleDirectoryRequest(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Check if request is from localhost
+	if !s.isLocalhostRequest(r) {
+		w.Header().Set("Content-Type", "application/json")
+		s.logger.Printf("Directory endpoint accessed from non-localhost: %s", r.RemoteAddr)
+		s.writeErrorResponse(w, http.StatusForbidden, LocalhostOnlyError.Type, LocalhostOnlyError.Title,
+			"This endpoint is only accessible from localhost (127.0.0.1)")
+		return
+	}
+
 	// Parse request body
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -952,4 +999,165 @@ func (s *Server) handleDirectoryRequest(w http.ResponseWriter, r *http.Request) 
 	}
 
 	s.logger.Printf("Listed directory: %s (%d entries)", cleanPath, len(dirEntries))
+}
+
+// handleExecRequest handles /exec endpoint for process execution
+func (s *Server) handleExecRequest(w http.ResponseWriter, r *http.Request) {
+	// Handle OPTIONS for CORS preflight
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	// Check if feature is enabled
+	if !s.enableExec {
+		s.logger.Printf("Exec endpoint accessed but feature is disabled")
+		s.writeErrorResponse(w, http.StatusForbidden, FeatureDisabledError.Type, FeatureDisabledError.Title,
+			"Process execution is disabled. Enable with --enable-exec flag.")
+		return
+	}
+
+	// Check if request is from localhost
+	if !s.isLocalhostRequest(r) {
+		s.logger.Printf("Exec endpoint accessed from non-localhost: %s", r.RemoteAddr)
+		s.writeErrorResponse(w, http.StatusForbidden, LocalhostOnlyError.Type, LocalhostOnlyError.Title,
+			"This endpoint is only accessible from localhost (127.0.0.1)")
+		return
+	}
+
+	// Parse request body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		s.writeErrorResponse(w, http.StatusBadRequest, "request_format_error", "Failed to read request body", err.Error())
+		return
+	}
+
+	var req ExecRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		s.writeErrorResponse(w, http.StatusBadRequest, "request_format_error", "Invalid JSON", fmt.Sprintf("Failed to parse JSON request: %v", err))
+		return
+	}
+
+	// Validate required fields
+	if req.Command == "" {
+		s.writeErrorResponse(w, http.StatusBadRequest, "request_format_error", "Missing command", "Command is required")
+		return
+	}
+
+	// Set default timeout (10s) and enforce max (20s)
+	if req.Timeout == 0 {
+		req.Timeout = 10
+	}
+	if req.Timeout > 20 {
+		req.Timeout = 20
+	}
+
+	s.logger.Printf("Exec request: %s %v (timeout: %ds)", req.Command, req.Args, req.Timeout)
+
+	// Execute the command
+	response := s.executeCommand(&req)
+
+	// Write response
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		s.logger.Printf("Failed to encode exec response: %v", err)
+	}
+}
+
+// executeCommand executes a command and returns the response
+func (s *Server) executeCommand(req *ExecRequest) *ExecResponse {
+	startTime := time.Now()
+
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(req.Timeout)*time.Second)
+	defer cancel()
+
+	// Create command
+	cmd := exec.CommandContext(ctx, req.Command, req.Args...)
+
+	// Set working directory if provided
+	if req.WorkingDir != "" {
+		cmd.Dir = req.WorkingDir
+	}
+
+	// Set environment variables if provided
+	if req.Env != nil {
+		cmd.Env = os.Environ() // Start with current environment
+		for key, value := range req.Env {
+			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
+		}
+	}
+
+	// Execute based on output mode
+	var stdout, stderr bytes.Buffer
+	var combinedOutput []byte
+	var err error
+
+	if req.CombineOutput {
+		combinedOutput, err = cmd.CombinedOutput()
+	} else {
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		err = cmd.Run()
+	}
+
+	executionTime := time.Since(startTime)
+
+	// Build response
+	response := &ExecResponse{
+		ExecutionTime: fmt.Sprintf("%.2f ms", float64(executionTime.Nanoseconds())/1000000),
+	}
+
+	// Check for errors
+	if err != nil {
+		// Check if it was a timeout
+		if ctx.Err() == context.DeadlineExceeded {
+			response.Success = false
+			response.ErrorType = ExecTimeoutError.Type
+			response.ErrorTitle = ExecTimeoutError.Title
+			response.ErrorMessage = fmt.Sprintf("Command timed out after %d seconds", req.Timeout)
+			s.logger.Printf("Command timed out: %s", req.Command)
+			return response
+		}
+
+		// Check for exit error (non-zero exit code)
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			response.Success = false
+			response.ExitCode = exitErr.ExitCode()
+
+			// Include output even on failure
+			if req.CombineOutput {
+				response.CombinedOutput = string(combinedOutput)
+			} else {
+				response.Stdout = stdout.String()
+				response.Stderr = stderr.String()
+			}
+
+			s.logger.Printf("Command failed with exit code %d: %s", response.ExitCode, req.Command)
+			return response
+		}
+
+		// Other execution error
+		response.Success = false
+		response.ErrorType = ExecFailedError.Type
+		response.ErrorTitle = ExecFailedError.Title
+		response.ErrorMessage = fmt.Sprintf("Failed to execute command: %v", err)
+		s.logger.Printf("Failed to execute command: %v", err)
+		return response
+	}
+
+	// Success
+	response.Success = true
+	response.ExitCode = 0
+
+	if req.CombineOutput {
+		response.CombinedOutput = string(combinedOutput)
+	} else {
+		response.Stdout = stdout.String()
+		response.Stderr = stderr.String()
+	}
+
+	s.logger.Printf("Command executed successfully: %s (exit code: 0, time: %s)", req.Command, response.ExecutionTime)
+	return response
 }

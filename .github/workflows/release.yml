@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'  # Trigger on version tags like v0.4.0, v1.0.0, etc.
+      - '[0-9]+.[0-9]+.[0-9]+'  # Trigger on semver tags like 0.4.0, 1.0.0, etc.
   workflow_dispatch:  # Allow manual workflow runs for testing
 
 permissions:
@@ -28,8 +28,8 @@ jobs:
       - name: Extract version from tag
         id: version
         run: |
-          # Remove 'v' prefix from tag to get version
-          VERSION=${GITHUB_REF#refs/tags/v}
+          # Extract version from tag (already in X.Y.Z format)
+          VERSION=${GITHUB_REF#refs/tags/}
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Building version: $VERSION"
 

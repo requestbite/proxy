@@ -79,7 +79,16 @@ func main() {
 		fmt.Println("\033[33mWarning:\033[0m Local file and dir serving enabled via /file and /dir endpoints")
 	}
 	if *enableExec {
-		fmt.Println("\033[33mWarning:\033[0m Process execution enabled via /exec endpoint (localhost only)")
+		fmt.Println("\033[31m╔═══════════════════════════════════════════════════════════════════════════╗")
+		fmt.Println("║                                                                           ║")
+		fmt.Println("║                                 WARNING!                                  ║")
+		fmt.Println("║                                 ========                                  ║")
+		fmt.Println("║                                                                           ║")
+		fmt.Println("║  You have enabled local execution of processes via the POST /exec         ║")
+		fmt.Println("║  endpoint. This means clients (on localhost) can execute any process      ║")
+		fmt.Println("║  as your user. Use with extreme caution.                                  ║")
+		fmt.Println("║                                                                           ║")
+		fmt.Println("╚═══════════════════════════════════════════════════════════════════════════╝\033[0m")
 	}
 	if *blacklistFile != "" {
 		fmt.Printf("\033[33mInfo:\033[0m Hostname blacklist enabled from file: %s\n", *blacklistFile)

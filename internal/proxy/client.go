@@ -16,12 +16,13 @@ import (
 
 // HTTPClient handles HTTP requests with proper timeout and redirect control
 type HTTPClient struct {
-	client  *http.Client
-	version string // Version for User-Agent
+	client        *http.Client
+	version       string // Version for User-Agent
+	enableLogging bool   // Enable verbose logging
 }
 
 // NewHTTPClient creates a new HTTP client with sensible defaults
-func NewHTTPClient(version string) *HTTPClient {
+func NewHTTPClient(version string, enableLogging bool) *HTTPClient {
 	transport := &http.Transport{
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 10,
@@ -39,7 +40,8 @@ func NewHTTPClient(version string) *HTTPClient {
 				return http.ErrUseLastResponse
 			},
 		},
-		version: version,
+		version:       version,
+		enableLogging: enableLogging,
 	}
 }
 
@@ -191,7 +193,9 @@ func (c *HTTPClient) ExecuteStreamingRequest(ctx context.Context, req *ProxyRequ
 
 	// Check if this is actually an SSE response
 	if !c.isSSEResponse(resp) {
-		log.Printf("[SSE-DEBUG] Not an SSE response, falling back to standard processing")
+		if c.enableLogging {
+			log.Printf("Not an SSE response, falling back to standard processing")
+		}
 		// If it's not SSE, fall back to regular processing
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
@@ -209,7 +213,9 @@ func (c *HTTPClient) ExecuteStreamingRequest(ctx context.Context, req *ProxyRequ
 		return json.NewEncoder(responseWriter).Encode(standardResp)
 	}
 
-	log.Printf("[SSE-DEBUG] Confirmed SSE response, starting streaming")
+	if c.enableLogging {
+		log.Printf("Confirmed SSE response, starting streaming")
+	}
 
 	// This is an SSE response - prepare for streaming
 	streamingResp := c.createStreamingResponse(resp)
@@ -227,7 +233,9 @@ func (c *HTTPClient) ExecuteStreamingRequest(ctx context.Context, req *ProxyRequ
 		return fmt.Errorf("failed to serialize streaming metadata: %v", err)
 	}
 
-	log.Printf("[SSE-DEBUG] Writing metadata: %s", string(metadataBytes))
+	if c.enableLogging {
+		log.Printf("Writing metadata: %s", string(metadataBytes))
+	}
 
 	// Write metadata as first line
 	if _, err := responseWriter.Write(metadataBytes); err != nil {
@@ -242,14 +250,20 @@ func (c *HTTPClient) ExecuteStreamingRequest(ctx context.Context, req *ProxyRequ
 	// Flush the metadata + separator immediately
 	if flusher, ok := responseWriter.(http.Flusher); ok {
 		flusher.Flush()
-		log.Printf("[SSE-DEBUG] Flushed metadata to client")
+		if c.enableLogging {
+			log.Printf("Flushed metadata to client")
+		}
 	}
 
-	log.Printf("[SSE-DEBUG] Starting SSE data stream")
+	if c.enableLogging {
+		log.Printf("Starting SSE data stream")
+	}
 
 	// Stream the SSE data with immediate flushing (no buffering)
 	if err := c.streamResponseWithFlush(responseWriter, resp.Body); err != nil {
-		log.Printf("[SSE-DEBUG] Error during SSE streaming: %v", err)
+		if c.enableLogging {
+			log.Printf("Error during SSE streaming: %v", err)
+		}
 		// Check if this is a timeout error and provide specific error message
 		if strings.Contains(err.Error(), "context deadline exceeded") || strings.Contains(err.Error(), "context canceled") {
 			return fmt.Errorf("streaming timeout: %v", err)
@@ -257,7 +271,9 @@ func (c *HTTPClient) ExecuteStreamingRequest(ctx context.Context, req *ProxyRequ
 		return fmt.Errorf("failed to stream response: %v", err)
 	}
 
-	log.Printf("[SSE-DEBUG] SSE streaming completed")
+	if c.enableLogging {
+		log.Printf("SSE streaming completed")
+	}
 	return nil
 }
 
@@ -388,35 +404,51 @@ func (c *HTTPClient) isBinaryContent(contentType string) bool {
 // isSSEResponse determines if the response is a Server-Sent Events stream
 // SSE streams should have Content-Type: text/event-stream and typically Transfer-Encoding: chunked
 func (c *HTTPClient) isSSEResponse(resp *http.Response) bool {
-	// Debug: Log all response headers
-	log.Printf("[SSE-DEBUG] Response status: %d", resp.StatusCode)
-	log.Printf("[SSE-DEBUG] Response headers:")
-	for key, values := range resp.Header {
-		log.Printf("[SSE-DEBUG]   %s: %v", key, values)
+	if c.enableLogging {
+		// Debug: Log all response headers
+		log.Printf("Response status: %d", resp.StatusCode)
+		log.Printf("Response headers:")
+		for key, values := range resp.Header {
+			log.Printf("  %s: %v", key, values)
+		}
 	}
 
 	// Check for text/event-stream content type (primary indicator)
 	contentType := strings.ToLower(resp.Header.Get("Content-Type"))
 	hasEventStream := strings.Contains(contentType, "text/event-stream")
-	log.Printf("[SSE-DEBUG] Content-Type: %s, hasEventStream: %v", contentType, hasEventStream)
+
+	if c.enableLogging {
+		log.Printf("Content-Type: %s, hasEventStream: %v", contentType, hasEventStream)
+	}
 
 	if !hasEventStream {
-		log.Printf("[SSE-DEBUG] Not SSE - no text/event-stream content type")
+		if c.enableLogging {
+			log.Printf("Not SSE - no text/event-stream content type")
+		}
 		return false
 	}
 
 	// Check for streaming indicators
 	transferEncoding := strings.ToLower(resp.Header.Get("Transfer-Encoding"))
 	hasChunked := strings.Contains(transferEncoding, "chunked")
-	log.Printf("[SSE-DEBUG] Transfer-Encoding: %s, hasChunked: %v", transferEncoding, hasChunked)
+
+	if c.enableLogging {
+		log.Printf("Transfer-Encoding: %s, hasChunked: %v", transferEncoding, hasChunked)
+	}
 
 	contentLength := resp.Header.Get("Content-Length")
 	noContentLength := contentLength == ""
-	log.Printf("[SSE-DEBUG] Content-Length: %s, noContentLength: %v", contentLength, noContentLength)
+
+	if c.enableLogging {
+		log.Printf("Content-Length: %s, noContentLength: %v", contentLength, noContentLength)
+	}
 
 	// For SSE, we expect either chunked encoding OR no content-length (indicating streaming)
 	isSSE := hasChunked || noContentLength
-	log.Printf("[SSE-DEBUG] Final SSE determination: %v (hasChunked: %v OR noContentLength: %v)", isSSE, hasChunked, noContentLength)
+
+	if c.enableLogging {
+		log.Printf("Final SSE determination: %v (hasChunked: %v OR noContentLength: %v)", isSSE, hasChunked, noContentLength)
+	}
 
 	return isSSE
 }
@@ -551,7 +583,9 @@ func (c *HTTPClient) writeStreamingErrorResponse(w http.ResponseWriter, resp *St
 func (c *HTTPClient) streamResponseWithFlush(w http.ResponseWriter, source io.Reader) error {
 	flusher, canFlush := w.(http.Flusher)
 	if !canFlush {
-		log.Printf("[SSE-DEBUG] Warning: ResponseWriter doesn't support flushing")
+		if c.enableLogging {
+			log.Printf("Warning: ResponseWriter doesn't support flushing")
+		}
 		// Fallback to regular copy if flushing not supported
 		_, err := io.Copy(w, source)
 		return err
@@ -566,22 +600,30 @@ func (c *HTTPClient) streamResponseWithFlush(w http.ResponseWriter, source io.Re
 		if n > 0 {
 			// Write the chunk immediately
 			if _, writeErr := w.Write(buffer[:n]); writeErr != nil {
-				log.Printf("[SSE-DEBUG] Write error: %v", writeErr)
+				if c.enableLogging {
+					log.Printf("Write error: %v", writeErr)
+				}
 				return writeErr
 			}
 
 			// Flush immediately to ensure data reaches client
 			flusher.Flush()
-			log.Printf("[SSE-DEBUG] Flushed %d bytes to client", n)
+			if c.enableLogging {
+				log.Printf("Flushed %d bytes to client", n)
+			}
 		}
 
 		// Handle read errors
 		if err != nil {
 			if err == io.EOF {
-				log.Printf("[SSE-DEBUG] Reached end of stream")
+				if c.enableLogging {
+					log.Printf("Reached end of stream")
+				}
 				return nil // Normal end of stream
 			}
-			log.Printf("[SSE-DEBUG] Read error: %v", err)
+			if c.enableLogging {
+				log.Printf("Read error: %v", err)
+			}
 			return err
 		}
 	}

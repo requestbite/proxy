@@ -33,7 +33,7 @@ type Server struct {
 }
 
 // NewServer creates a new proxy server instance
-func NewServer(port int, version string, enableLocalFiles bool, blacklistFile string) (*Server, error) {
+func NewServer(port int, version string, enableLocalFiles bool, blacklistFile string, enableLogging bool) (*Server, error) {
 	logger := log.New(log.Writer(), "[PROXY] ", log.LstdFlags)
 
 	// CONFIGURABLE: List of hostnames to block to prevent loops
@@ -55,7 +55,7 @@ func NewServer(port int, version string, enableLocalFiles bool, blacklistFile st
 
 	return &Server{
 		port:             port,
-		httpClient:       NewHTTPClient(version),
+		httpClient:       NewHTTPClient(version, enableLogging),
 		logger:           logger,
 		blockedHostnames: blockedHostnames,
 		version:          version,

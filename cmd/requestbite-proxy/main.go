@@ -25,6 +25,7 @@ func main() {
 		port             = flag.IntP("port", "p", DefaultPort, "Port to listen on")
 		enableLocalFiles = flag.Bool("enable-local-files", false, "Enable local file and directory serving")
 		blacklistFile    = flag.String("enable-blacklist", "", "Enable hostname blacklist from file (one hostname per line)")
+		enableLogging    = flag.BoolP("logging", "l", false, "Enable verbose logging")
 		showVersion      = flag.BoolP("version", "v", false, "Show version information")
 		showHelp         = flag.BoolP("help", "h", false, "Show help information")
 	)
@@ -53,7 +54,7 @@ func main() {
 	}
 
 	// Start the proxy server
-	server, err := proxy.NewServer(*port, Version, *enableLocalFiles, *blacklistFile)
+	server, err := proxy.NewServer(*port, Version, *enableLocalFiles, *blacklistFile, *enableLogging)
 	if err != nil {
 		log.Fatalf("Failed to create proxy server: %v", err)
 	}

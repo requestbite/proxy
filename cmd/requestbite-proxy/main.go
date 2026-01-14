@@ -75,21 +75,36 @@ func main() {
 	}
 
 	fmt.Printf("RequestBite Slingshot Proxy v%s listening on port %d\n", Version, *port)
-	if *enableLocalFiles {
-		fmt.Println("\033[33mWarning:\033[0m Local file and dir serving enabled via /file and /dir endpoints")
-	}
-	if *enableExec {
+
+	// Show security warnings for enabled features
+	if *enableLocalFiles || *enableExec {
 		fmt.Println("\033[31m╔═══════════════════════════════════════════════════════════════════════════╗")
 		fmt.Println("║                                                                           ║")
 		fmt.Println("║                                 WARNING!                                  ║")
 		fmt.Println("║                                 ========                                  ║")
 		fmt.Println("║                                                                           ║")
-		fmt.Println("║  You have enabled local execution of processes via the POST /exec         ║")
-		fmt.Println("║  endpoint. This means clients (on localhost) can execute any process      ║")
-		fmt.Println("║  as your user. Use with extreme caution.                                  ║")
+
+		if *enableLocalFiles {
+			fmt.Println("║  You have enabled file browsing and the ability to read files via the     ║")
+			fmt.Println("║  POST /dir and /file endpoints. This means clients (on localhost) can     ║")
+			fmt.Println("║  read any directories and files your user has access to. Use with         ║")
+			fmt.Println("║  caution.                                                                 ║")
+
+			if *enableExec {
+				fmt.Println("║                                                                           ║")
+			}
+		}
+
+		if *enableExec {
+			fmt.Println("║  You have enabled local execution of processes via the POST /exec         ║")
+			fmt.Println("║  endpoint. This means clients (on localhost) can execute any process      ║")
+			fmt.Println("║  as your user. Use with extreme caution.                                  ║")
+		}
+
 		fmt.Println("║                                                                           ║")
 		fmt.Println("╚═══════════════════════════════════════════════════════════════════════════╝\033[0m")
 	}
+
 	if *blacklistFile != "" {
 		fmt.Printf("\033[33mInfo:\033[0m Hostname blacklist enabled from file: %s\n", *blacklistFile)
 	}

@@ -5,7 +5,8 @@
 # If on exact tag like v1.2.3, VERSION = 1.2.3
 # If ahead of tag, VERSION = 1.2.3-abc1234 (tag-commit)
 # If no tags, VERSION = dev
-VERSION := $(shell if git describe --tags --exact-match 2>/dev/null >/dev/null; then \
+# Use environment variable VERSION if already set (e.g., from CI/CD)
+VERSION ?= $(shell if git describe --tags --exact-match 2>/dev/null >/dev/null; then \
 	git describe --tags --exact-match | sed 's/^v//'; \
 else \
 	git describe --tags 2>/dev/null | sed 's/^v//' | sed 's/-[0-9]\+-g/-/' || echo "dev"; \

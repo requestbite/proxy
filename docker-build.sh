@@ -3,19 +3,38 @@
 
 set -e
 
-# Extract version information (same logic as Makefile)
-if git describe --tags --exact-match 2>/dev/null >/dev/null; then
+# Show usage if no parameters provided
+if [ $# -eq 0 ]; then
+    echo "Usage: $0 <image-name> [version]"
+    echo ""
+    echo "Arguments:"
+    echo "  image-name    Docker image name (e.g., requestbite/requestbite-proxy)"
+    echo "  version       Optional version tag (default: auto-detect from git)"
+    echo ""
+    echo "Examples:"
+    echo "  $0 requestbite/requestbite-proxy"
+    echo "  $0 requestbite/requestbite-proxy 0.4.1"
+    exit 1
+fi
+
+IMAGE_NAME="$1"
+
+# Extract version information
+if [ -n "$2" ]; then
+    # Use explicitly provided version
+    VERSION="$2"
+elif git describe --tags --exact-match 2>/dev/null >/dev/null; then
+    # We're exactly on a tag
     VERSION=$(git describe --tags --exact-match | sed 's/^v//')
 else
-    VERSION=$(git describe --tags 2>/dev/null | sed 's/^v//' | sed 's/-[0-9]\+-g/-/' || echo "dev")
+    # Get the latest tag without commit info
+    VERSION=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "dev")
 fi
 
 BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
 GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
-# Image name (can be overridden with first argument)
-IMAGE_NAME="${1:-rb-proxy}"
-IMAGE_TAG="${2:-latest}"
+IMAGE_TAG="latest"
 
 echo "Building Docker image with version information:"
 echo "  VERSION:    $VERSION"

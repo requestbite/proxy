@@ -1,3 +1,5 @@
+[![Release](https://github.com/requestbite/proxy/actions/workflows/release.yml/badge.svg)](https://github.com/requestbite/proxy/actions/workflows/release.yml)
+
 # RequestBite Slingshot Proxy
 
 ## About

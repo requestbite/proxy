@@ -136,22 +136,16 @@ func isRunningInDevelopment() bool {
 	return false
 }
 
-// HealthResponse represents the response from the health endpoint
-type HealthResponse struct {
-	Status    string `json:"status"`
-	Version   string `json:"version"`
-	UserAgent string `json:"user-agent"`
-}
-
-// getRemoteVersion fetches the latest version from the health endpoint with a 2-second timeout
+// getRemoteVersion fetches the latest released version from the GitHub releases API.
 func getRemoteVersion() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://p.requestbite.com/health", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.github.com/repos/requestbite/proxy/releases/latest", nil)
 	if err != nil {
 		return "", err
 	}
+	req.Header.Set("Accept", "application/vnd.github+json")
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -164,12 +158,33 @@ func getRemoteVersion() (string, error) {
 		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	var healthResp HealthResponse
-	if err := json.NewDecoder(resp.Body).Decode(&healthResp); err != nil {
+	var release struct {
+		TagName string `json:"tag_name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
 		return "", err
 	}
 
-	return healthResp.Version, nil
+	return strings.TrimPrefix(release.TagName, "v"), nil
+}
+
+// parseSemver splits a "X.Y.Z" string into [X, Y, Z] integers.
+func parseSemver(v string) (major, minor, patch int) {
+	fmt.Sscanf(v, "%d.%d.%d", &major, &minor, &patch)
+	return
+}
+
+// semverGreater reports whether a > b.
+func semverGreater(a, b string) bool {
+	aMaj, aMin, aPat := parseSemver(a)
+	bMaj, bMin, bPat := parseSemver(b)
+	if aMaj != bMaj {
+		return aMaj > bMaj
+	}
+	if aMin != bMin {
+		return aMin > bMin
+	}
+	return aPat > bPat
 }
 
 // checkForUpdates checks if a new version is available and prompts the user to install it
@@ -180,9 +195,8 @@ func checkForUpdates() {
 		return
 	}
 
-	// Compare versions (simple string comparison)
-	if remoteVersion == Version || remoteVersion == "" {
-		return // No update available or same version
+	if remoteVersion == "" || !semverGreater(remoteVersion, Version) {
+		return
 	}
 
 	// Notify user about new version

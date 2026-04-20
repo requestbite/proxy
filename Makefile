@@ -13,7 +13,7 @@ else \
 fi)
 
 # Binary name
-BINARY_NAME := rb-proxy
+BINARY_NAME := rbite-proxy
 
 # Build metadata
 BUILD_TIME := $(shell date -u '+%Y-%m-%d %H:%M:%S UTC')

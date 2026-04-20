@@ -11,7 +11,7 @@
 set -euo pipefail
 
 # Configuration
-BINARY_NAME="rb-proxy"
+BINARY_NAME="rbite-proxy"
 GITHUB_REPO="requestbite/proxy"
 DEFAULT_INSTALL_DIR="$HOME/.local/bin"
 
